@@ -1,0 +1,65 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi } from '../api';
+
+const AuthContext = createContext(null);
+
+// Normalize the user object — backends sometimes wrap it, sometimes don't
+const extractUser = (data) => {
+  if (!data) return null;
+  // If response has a nested 'user' key, use that; otherwise use data directly
+  return data.user || data;
+};
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkToken();
+  }, []);
+
+  const checkToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const r = await authApi.me();
+        setUser(extractUser(r.data));
+      }
+    } catch (e) {
+      console.log('Failed to restore token', e);
+      await AsyncStorage.removeItem('token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email, password) => {
+    const r = await authApi.login({ email, password });
+    await AsyncStorage.setItem('token', r.data.token);
+    setUser(extractUser(r.data));
+  };
+
+  // Call this to force a fresh user fetch (e.g. from ProfileScreen)
+  const refreshUser = async () => {
+    try {
+      const r = await authApi.me();
+      setUser(extractUser(r.data));
+    } catch (e) {
+      console.log('Failed to refresh user', e);
+    }
+  };
+
+  const logout = async () => {
+    await AsyncStorage.removeItem('token');
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);
