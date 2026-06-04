@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, TextInput } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { leadsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LeadsScreen({ navigation }) {
   const [leads, setLeads] = useState([]);
@@ -79,7 +80,17 @@ export default function LeadsScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.menuBtn}>
+          <Ionicons name="menu-outline" size={26} color={Theme.colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Leads</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('AddLead')} style={styles.menuBtn}>
+          <Ionicons name="add" size={26} color={Theme.colors.white} />
+        </TouchableOpacity>
+      </View>
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={Theme.colors.textSecondary} style={styles.searchIcon} />
         <TextInput
@@ -120,7 +131,7 @@ export default function LeadsScreen({ navigation }) {
       <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('AddLead')}>
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -152,6 +163,24 @@ const getStatusTextStyle = (status) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.surface },
+  header: {
+    backgroundColor: Theme.colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerTitle: {
+    color: Theme.colors.white,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Theme.typography.fontFamily,
+  },
+  menuBtn: {
+    width: 40,
+    alignItems: 'center',
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,11 +294,11 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 130,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

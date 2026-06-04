@@ -13,26 +13,43 @@ export default function PresentationRecordingScreen({ route, navigation }) {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [webViewKey, setWebViewKey] = useState(0);
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+  const isPreparingRef = useRef(false);
+  const recordingRef = useRef(null);
+  const recordingUriRef = useRef(null);
 
-  // Prevent back navigation
+  // Store latest handleEndPresentation in a ref to avoid stale closures in useEffect
+  const handleEndPresentationRef = useRef();
+
+  // Prevent back navigation without saving
   useEffect(() => {
-    navigation.setOptions({
-      headerLeft: () => null,
-      gestureEnabled: false,
+    // Show standard back button but intercept it
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // If we are already processing, or if this is a dispatch we triggered (like reset), let it go
+      if (e.data.action.type !== 'GO_BACK') return;
+      
+      e.preventDefault();
+      if (handleEndPresentationRef.current) {
+        handleEndPresentationRef.current();
+      }
     });
 
     const backAction = () => {
-      Alert.alert('Recording in Progress', 'Please end the presentation to stop recording and exit.', [
-        { text: 'OK', onPress: () => null }
-      ]);
+      if (handleEndPresentationRef.current) {
+        handleEndPresentationRef.current();
+      }
       return true; // Prevent default behavior
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    return () => backHandler.remove();
+    
+    return () => {
+      unsubscribe();
+      backHandler.remove();
+    };
   }, [navigation]);
 
   // Start recording on mount
@@ -44,6 +61,8 @@ export default function PresentationRecordingScreen({ route, navigation }) {
   }, []);
 
   const startRecording = async () => {
+    if (isPreparingRef.current) return;
+    isPreparingRef.current = true;
     try {
       console.log('Requesting permissions..');
       await Audio.requestPermissionsAsync();
@@ -54,41 +73,67 @@ export default function PresentationRecordingScreen({ route, navigation }) {
       });
 
       console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      let newRecording;
+      try {
+        const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        newRecording = result.recording;
+      } catch (createErr) {
+        if (createErr.message && createErr.message.includes('Only one Recording object')) {
+          console.log('Previous recording still unloading, waiting and retrying...');
+          await new Promise(resolve => setTimeout(resolve, 800));
+          const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+          newRecording = result.recording;
+        } else {
+          throw createErr;
+        }
+      }
+
+      recordingRef.current = newRecording;
+      setRecording(newRecording);
       setIsRecording(true);
       startTimeRef.current = Date.now();
 
       // Start Timer
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
     } catch (err) {
       console.error('Failed to start recording', err);
       Alert.alert('Error', 'Failed to start recording. Please ensure microphone permissions are granted.', [
-        { text: 'Go Back', onPress: () => navigation.replace('PresentationHistory') }
+        { text: 'Go Back', onPress: () => navigation.navigate('Root', { screen: 'PresentationHistory' }) }
       ]);
+    } finally {
+      isPreparingRef.current = false;
     }
   };
 
-  const stopRecordingAndCleanup = async (isUnmount = false) => {
-    if (timerRef.current) clearInterval(timerRef.current);
+  const stopRecordingAndCleanup = async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
-    if (recording) {
+    const rec = recordingRef.current || recording;
+    if (rec) {
       try {
-        await recording.stopAndUnloadAsync();
+        const uri = rec.getURI();
+        if (uri) recordingUriRef.current = uri;
+
+        await rec.stopAndUnloadAsync();
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
         });
       } catch (e) {
-        console.error('Error stopping recording:', e);
+        if (!e.message?.includes('already been unloaded')) {
+          console.error('Error stopping recording:', e);
+        }
       }
     }
     
-    if (isUnmount) {
-      setRecording(null);
-      setIsRecording(false);
-    }
+    setRecording(null);
+    recordingRef.current = null;
+    setIsRecording(false);
   };
 
   const handleEndPresentation = async () => {
@@ -105,7 +150,9 @@ export default function PresentationRecordingScreen({ route, navigation }) {
             await stopRecordingAndCleanup(false);
             
             try {
-              const uri = recording.getURI();
+              const uri = recordingUriRef.current;
+              if (!uri) throw new Error("No recording URI found");
+              
               const selfieUri = presentationData?.selfieUri;
               
               // Upload audio and image concurrently
@@ -115,9 +162,10 @@ export default function PresentationRecordingScreen({ route, navigation }) {
               ]);
               
               // Save metadata
+              const finalDuration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : duration;
               await presentationService.savePresentation({
                 ...presentationData,
-                duration: duration,
+                duration: finalDuration,
                 audioUrl: audioUrl,
                 selfieUrl: selfieUrl,
                 localAudioUri: uri,
@@ -125,7 +173,18 @@ export default function PresentationRecordingScreen({ route, navigation }) {
 
               setIsProcessing(false);
               Alert.alert('Success', 'Presentation recorded and saved successfully.', [
-                { text: 'OK', onPress: () => navigation.replace('PresentationHistory') }
+                { text: 'OK', onPress: () => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{
+                      name: 'Root',
+                      state: {
+                        routes: [{ name: 'PresentationHistory' }],
+                        index: 0,
+                      }
+                    }],
+                  });
+                }}
               ]);
             } catch (error) {
               setIsProcessing(false);
@@ -150,6 +209,8 @@ export default function PresentationRecordingScreen({ route, navigation }) {
     return `${hDisplay}${mDisplay}:${sDisplay}`;
   };
 
+  handleEndPresentationRef.current = handleEndPresentation;
+
   if (isProcessing) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -161,8 +222,13 @@ export default function PresentationRecordingScreen({ route, navigation }) {
 
   // Determine URL for WebView
   const pptUrl = presentationData?.pptUrl;
+  
+  // Use Microsoft Office Viewer for better PPT support, fallback to Google Docs for PDFs
+  const isPpt = pptUrl?.toLowerCase().includes('.ppt');
   const webViewUrl = pptUrl 
-    ? `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pptUrl)}`
+    ? (isPpt 
+        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(pptUrl)}`
+        : `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(pptUrl)}`)
     : null;
 
   return (
@@ -170,17 +236,29 @@ export default function PresentationRecordingScreen({ route, navigation }) {
       {/* PPT Viewer Section */}
       <View style={styles.viewerContainer}>
         {webViewUrl ? (
-          <WebView 
-            source={{ uri: webViewUrl }} 
-            style={{ flex: 1 }} 
-            startInLoadingState={true}
-            renderLoading={() => (
-              <View style={styles.webviewLoader}>
-                <ActivityIndicator size="large" color={Theme.colors.primary} />
-                <Text style={{ marginTop: 8 }}>Loading Presentation...</Text>
-              </View>
-            )}
-          />
+          <View style={{ flex: 1 }}>
+            <WebView 
+              key={webViewKey}
+              source={{ uri: webViewUrl }} 
+              style={{ flex: 1 }} 
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.webviewLoader}>
+                  <ActivityIndicator size="large" color={Theme.colors.primary} />
+                  <Text style={{ marginTop: 8 }}>Loading Presentation...</Text>
+                </View>
+              )}
+              onError={() => setWebViewKey(prev => prev + 1)}
+              onHttpError={() => setWebViewKey(prev => prev + 1)}
+            />
+            <TouchableOpacity 
+              style={styles.reloadBtn} 
+              onPress={() => setWebViewKey(prev => prev + 1)}
+            >
+              <Ionicons name="refresh" size={20} color={Theme.colors.white || '#fff'} />
+              <Text style={styles.reloadText}>Reload</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={styles.noPptContainer}>
             <Ionicons name="document-text-outline" size={64} color="#ccc" />
@@ -224,6 +302,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  reloadBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  reloadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   noPptContainer: {
     flex: 1,

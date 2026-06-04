@@ -153,30 +153,59 @@ export default function PresentationFormScreen({ navigation }) {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Select Material to Present</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {user.ppts.map((ppt) => (
-              <TouchableOpacity
-                key={ppt._id}
-                style={[
-                  styles.pptSelectorCard,
-                  selectedPptUrl === ppt.url && styles.pptSelectorCardActive
-                ]}
-                onPress={() => setSelectedPptUrl(ppt.url)}
-              >
-                <Ionicons 
-                  name="document-text" 
-                  size={24} 
-                  color={selectedPptUrl === ppt.url ? Theme.colors.white : Theme.colors.primary} 
-                  style={{ marginBottom: 4 }} 
-                />
-                <Text style={[
-                  styles.pptTitle,
-                  selectedPptUrl === ppt.url && { color: Theme.colors.white }
-                ]} numberOfLines={2}>
-                  {ppt.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {user.ppts.map((ppt) => {
+              const isSelected = selectedPptUrl === ppt.url;
+              return (
+                <TouchableOpacity
+                  key={ppt._id}
+                  style={[
+                    styles.pptSelectorCard,
+                    isSelected && styles.pptSelectorCardActive
+                  ]}
+                  onPress={() => setSelectedPptUrl(ppt.url)}
+                  activeOpacity={0.8}
+                >
+                  {/* Checkmark badge in top-right corner when selected */}
+                  {isSelected && (
+                    <View style={styles.checkBadge}>
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    </View>
+                  )}
+                  <Ionicons
+                    name="document-text"
+                    size={28}
+                    color={isSelected ? Theme.colors.white : Theme.colors.primary}
+                    style={{ marginBottom: 6 }}
+                  />
+                  <Text style={[
+                    styles.pptTitle,
+                    isSelected && { color: Theme.colors.white, fontWeight: '700' }
+                  ]} numberOfLines={2}>
+                    {ppt.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
+
+          {/* Selected confirmation row */}
+          {selectedPptUrl ? (
+            <View style={styles.selectedConfirm}>
+              <Ionicons name="checkmark-circle" size={18} color={Theme.colors.success} />
+              <Text style={styles.selectedConfirmText}>
+                Selected: <Text style={{ fontWeight: '700' }}>
+                  {user.ppts.find(p => p.url === selectedPptUrl)?.title || 'Material'}
+                </Text>
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.selectedConfirm}>
+              <Ionicons name="alert-circle-outline" size={18} color={Theme.colors.textSecondary} />
+              <Text style={[styles.selectedConfirmText, { color: Theme.colors.textSecondary }]}>
+                No material selected (optional)
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -296,19 +325,47 @@ const styles = StyleSheet.create({
   },
   pptSelectorCard: {
     width: 120,
-    height: 90,
+    height: 100,
     backgroundColor: Theme.colors.white || '#fff',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Theme.colors.border || '#ccc',
-    borderRadius: 8,
+    borderRadius: 10,
     marginRight: 12,
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   pptSelectorCardActive: {
     backgroundColor: Theme.colors.primary || '#3B82F6',
     borderColor: Theme.colors.primary || '#3B82F6',
+    elevation: 4,
+    shadowColor: Theme.colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Theme.colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedConfirm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  selectedConfirmText: {
+    fontSize: 13,
+    color: Theme.colors.success,
   },
   pptTitle: {
     fontSize: 12,

@@ -3,13 +3,15 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, RefreshControl, Linking
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const navigation = useNavigation();
   const [refreshing, setRefreshing] = React.useState(false);
 
   // Re-fetch fresh user data every time the tab is visited
@@ -34,12 +36,22 @@ export default function ProfileScreen() {
   const employeeId = user?.employeeId || user?.empId || user?.staffId;
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Theme.colors.primary} />}
-    >
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.menuBtn}>
+          <Ionicons name="menu-outline" size={26} color={Theme.colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={{ width: 40 }} />
+      </View>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 160 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Theme.colors.primary} />}
+    >
+      {/* Profile Card */}
+      <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
             {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
@@ -107,6 +119,7 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -138,9 +151,27 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.surface,
   },
   header: {
+    backgroundColor: Theme.colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerTitle: {
+    color: Theme.colors.white,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Theme.typography.fontFamily,
+  },
+  menuBtn: {
+    width: 40,
+    alignItems: 'center',
+  },
+  profileCard: {
     alignItems: 'center',
     backgroundColor: Theme.colors.white,
-    paddingTop: Theme.spacing.xxl,
+    paddingTop: Theme.spacing.l,
     paddingBottom: Theme.spacing.l,
     borderBottomWidth: 1,
     borderBottomColor: Theme.colors.border,

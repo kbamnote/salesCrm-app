@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Theme } from '../../theme/Theme';
 import { presentationService } from '../../services/presentationService';
@@ -159,13 +160,6 @@ export default function PresentationHistoryScreen({ navigation }) {
           contentContainerStyle={styles.listContainer}
         />
       )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate('PresentationForm')}
-      >
-        <Ionicons name="add" size={30} color={Theme.colors.white || '#fff'} />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -174,9 +168,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Theme.colors.surface || '#f5f5f5',
-  },
-  loader: {
-    marginTop: 50,
   },
   pptContainer: {
     marginBottom: 16,
@@ -211,6 +202,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     padding: 16,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: Theme.colors.white || '#fff',
@@ -272,20 +264,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Theme.colors.textSecondary || '#666',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: Theme.colors.primary || '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
+  loader: { marginTop: 50 },
 });

@@ -1,23 +1,24 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { targetsApi, leadsApi, clientsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [targetData, setTargetData] = useState(null);
-  const [targetAvailable, setTargetAvailable] = useState(true);
   const [stats, setStats] = useState({ leads: 0, clients: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('Overview');
 
   const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
 
   const loadData = async () => {
-    // Load all in parallel, each fail independently
     const [targetRes, leadsRes, clientsRes] = await Promise.allSettled([
       targetsApi.myTarget(currentMonth),
       leadsApi.list(),
@@ -26,11 +27,8 @@ export default function DashboardScreen() {
 
     if (targetRes.status === 'fulfilled') {
       setTargetData(targetRes.value.data);
-      setTargetAvailable(true);
     } else {
-      // 404 = endpoint not ready on backend yet, handle silently
       setTargetData(null);
-      setTargetAvailable(targetRes.reason?.response?.status !== 404);
     }
 
     if (leadsRes.status === 'fulfilled') {
@@ -62,100 +60,155 @@ export default function DashboardScreen() {
     );
   }
 
-  const revenueTarget = targetData?.target || 0;
   const achieved = targetData?.achieved || 0;
-  const progressPct = revenueTarget > 0 ? Math.min((achieved / revenueTarget) * 100, 100) : 0;
+  
+  // Dummy chart data matching the UI provided
+  const simpleChartData = [
+    { label: 'Apr', value: 40 },
+    { label: 'May', value: 80 },
+    { label: 'Jun', value: 60 },
+    { label: 'Jul', value: 100 },
+  ];
 
-  const monthName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const salesProgressData = [
+    { label: 'Jan', blue: 30, green: 60 },
+    { label: 'Feb', blue: 45, green: 75 },
+    { label: 'Mar', blue: 20, green: 40 },
+    { label: 'Apr', blue: 50, green: 110 },
+    { label: 'May', blue: 65, green: 140, isMax: true },
+    { label: 'Jun', blue: 55, green: 90 },
+    { label: 'Jul', blue: 50, green: 80 },
+  ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Theme.colors.primary} />}
-    >
-      {/* Greeting Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0]} 👋</Text>
-          <Text style={styles.subtitle}>{monthName} — here's your overview</Text>
-        </View>
-        <View style={styles.avatarSmall}>
-          <Text style={styles.avatarSmallText}>{user?.name?.substring(0, 1)?.toUpperCase() || 'U'}</Text>
-        </View>
-      </View>
+    <View style={styles.container}>
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Theme.colors.white} />}
+        contentContainerStyle={{ paddingBottom: 160 }}
+      >
+        {/* Blue Header Section */}
+        <View style={styles.headerBackground}>
+          <SafeAreaView edges={['top']} style={styles.safeArea}>
+            {/* Top Nav */}
+            <View style={styles.topNav}>
+              <TouchableOpacity onPress={() => navigation.openDrawer()}>
+                <Ionicons name="grid-outline" size={24} color={Theme.colors.white} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Welcome Back</Text>
+              <TouchableOpacity>
+                <Ionicons name="ellipsis-horizontal" size={24} color={Theme.colors.white} />
+              </TouchableOpacity>
+            </View>
 
-      {/* Quick Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Ionicons name="funnel" size={20} color="#4F46E5" />
-          <Text style={styles.statNumber}>{stats.leads}</Text>
-          <Text style={styles.statLabel}>Leads</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="people" size={20} color="#10B981" />
-          <Text style={styles.statNumber}>{stats.clients}</Text>
-          <Text style={styles.statLabel}>Clients</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="calendar" size={20} color="#F59E0B" />
-          <Text style={styles.statNumber}>{new Date().getDate()}</Text>
-          <Text style={styles.statLabel}>Day</Text>
-        </View>
-      </View>
-
-      {/* Monthly Target Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="trophy" size={24} color={Theme.colors.warning} />
-          <Text style={styles.cardTitle}>Monthly Target</Text>
-        </View>
-
-        {targetData ? (
-          <>
-            <View style={styles.targetRow}>
-              <View>
-                <Text style={styles.statsLabel}>Achieved</Text>
-                <Text style={styles.statsValuePositive}>₹{achieved.toLocaleString()}</Text>
+            {/* Balance Info */}
+            <View style={styles.balanceContainer}>
+              <Text style={styles.balanceLabel}>Total Target Achieved</Text>
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceValue}>₹{achieved.toLocaleString()}</Text>
+                <TouchableOpacity style={styles.monthBadge}>
+                  <Text style={styles.monthBadgeText}>Month</Text>
+                </TouchableOpacity>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.statsLabel}>Target</Text>
-                <Text style={styles.statsValue}>₹{revenueTarget.toLocaleString()}</Text>
+              <View style={styles.increaseRow}>
+                <Ionicons name="trending-up" size={14} color={Theme.colors.white} />
+                <Text style={styles.increaseText}>+1.7% This month</Text>
               </View>
             </View>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBar, { width: `${progressPct}%` }]} />
-            </View>
-            <Text style={styles.progressText}>{progressPct.toFixed(1)}% Completed</Text>
-          </>
-        ) : (
-          <View style={styles.noTarget}>
-            <Ionicons name="bar-chart-outline" size={36} color={Theme.colors.border} />
-            <Text style={styles.noTargetTitle}>No target set yet</Text>
-            <Text style={styles.noTargetText}>Your manager hasn't assigned a target for {monthName}.</Text>
+          </SafeAreaView>
+        </View>
+
+        {/* Floating Pill Buttons */}
+        <View style={styles.floatingButtonsContainer}>
+          <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('Clients')}>
+            <Ionicons name="people-outline" size={20} color={Theme.colors.primary} />
+            <Text style={styles.floatingButtonText}>Clients</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate('Leads')}>
+            <Ionicons name="funnel-outline" size={20} color={Theme.colors.primary} />
+            <Text style={styles.floatingButtonText}>Leads</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Segmented Control Card */}
+        <View style={styles.analyticsCard}>
+          <View style={styles.segmentContainer}>
+            {['Overview', 'Analytic', 'Operation'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.segmentTab, activeTab === tab && styles.segmentTabActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.segmentTabText, activeTab === tab && styles.segmentTabTextActive]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
-      </View>
 
-      {/* Quick Actions */}
-      <Text style={styles.sectionHeading}>Quick Actions</Text>
-      <View style={styles.quickActionsGrid}>
-        <ActionCard icon="call" title="Calls Log" color="#4F46E5" />
-        <ActionCard icon="people" title="My Clients" color="#10B981" />
-        <ActionCard icon="calendar" title="Meetings" color="#F59E0B" />
-        <ActionCard icon="cash" title="My Deals" color="#EF4444" />
-      </View>
+          {/* Simple Chart Section */}
+          <View style={styles.simpleChartRow}>
+            <View style={styles.simpleChartLeft}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 4 }}>
+                <Text style={styles.bigStatNumber}>9,567</Text>
+                <View style={styles.greenBadge}>
+                  <Ionicons name="trending-up" size={12} color={Theme.colors.accent} />
+                  <Text style={styles.greenBadgeText}>1.756</Text>
+                </View>
+              </View>
+              <Text style={styles.statDescription}>Your sales increased this month by around 56%</Text>
+            </View>
+            
+            <View style={styles.simpleChartBars}>
+              {simpleChartData.map((item, index) => (
+                <View key={index} style={styles.barColumn}>
+                  <View style={[styles.singleBar, { height: item.value }]} />
+                  <Text style={styles.barLabel}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
 
-    </ScrollView>
-  );
-}
+        {/* Sales Progress Card */}
+        <View style={styles.salesProgressCard}>
+          <View style={styles.salesProgressHeader}>
+            <Text style={styles.cardTitle}>Sales Progress</Text>
+            <TouchableOpacity style={styles.monthDropdown}>
+              <Text style={styles.monthDropdownText}>Month</Text>
+              <Ionicons name="chevron-down" size={14} color={Theme.colors.white} />
+            </TouchableOpacity>
+          </View>
 
-function ActionCard({ icon, title, color }) {
-  return (
-    <View style={styles.actionCard}>
-      <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon} size={28} color={color} />
-      </View>
-      <Text style={styles.actionText}>{title}</Text>
+          <View style={styles.multiChartContainer}>
+            {/* Y-Axis Labels */}
+            <View style={styles.yAxis}>
+              <Text style={styles.yAxisText}>1M</Text>
+              <Text style={styles.yAxisText}>50k</Text>
+              <Text style={styles.yAxisText}>25k</Text>
+              <Text style={styles.yAxisText}>0</Text>
+            </View>
+
+            {/* Bars */}
+            <View style={styles.multiBarsWrapper}>
+              {salesProgressData.map((item, index) => (
+                <View key={index} style={styles.multiBarColumn}>
+                  {item.isMax && (
+                    <Ionicons name="trophy" size={16} color="#F59E0B" style={{ marginBottom: 4 }} />
+                  )}
+                  <View style={styles.multiBarPair}>
+                    <View style={[styles.blueBar, { height: item.blue }]} />
+                    <View style={[styles.greenBar, { height: item.green }]} />
+                  </View>
+                  <Text style={styles.barLabel}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+      </ScrollView>
     </View>
   );
 }
@@ -163,200 +216,267 @@ function ActionCard({ icon, title, color }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Theme.colors.surface,
+    backgroundColor: Theme.colors.background,
   },
-  header: {
+  headerBackground: {
+    backgroundColor: Theme.colors.primary,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    paddingBottom: 50, // Space for overlapping buttons
+  },
+  safeArea: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  topNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  headerTitle: {
+    color: Theme.colors.white,
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: Theme.typography.fontFamily,
+  },
+  balanceContainer: {
+    marginBottom: 20,
+  },
+  balanceLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    fontFamily: Theme.typography.fontFamily,
+    marginBottom: 4,
+  },
+  balanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Theme.spacing.l,
+    marginBottom: 8,
+  },
+  balanceValue: {
+    color: Theme.colors.white,
+    fontSize: 36,
+    fontWeight: 'bold',
+    fontFamily: Theme.typography.fontFamily,
+  },
+  monthBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  monthBadgeText: {
+    color: Theme.colors.white,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  increaseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  increaseText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  floatingButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: -25,
+    paddingHorizontal: 20,
+    gap: 15,
+    zIndex: 10,
+  },
+  floatingButton: {
+    flex: 1,
+    flexDirection: 'row',
     backgroundColor: Theme.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Theme.colors.border,
-  },
-  greeting: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xl,
-    fontWeight: Theme.typography.weights.bold,
-    color: Theme.colors.primary,
-  },
-  subtitle: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.s,
-    color: Theme.colors.textSecondary,
-    marginTop: Theme.spacing.xs,
-  },
-  avatarSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Theme.colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarSmallText: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.m,
-    fontWeight: Theme.typography.weights.bold,
-    color: '#fff',
-  },
-  // Quick stats
-  statsRow: {
-    flexDirection: 'row',
-    padding: Theme.spacing.m,
-    gap: Theme.spacing.s,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Theme.colors.white,
-    borderRadius: Theme.borderRadius.l,
-    padding: Theme.spacing.m,
-    alignItems: 'center',
-    elevation: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    gap: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  statNumber: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xl,
-    fontWeight: Theme.typography.weights.bold,
-    color: Theme.colors.text,
+  floatingButtonText: {
+    color: Theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
-  statLabel: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: 11,
-    color: Theme.colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  // Target card
-  card: {
+  analyticsCard: {
     backgroundColor: Theme.colors.white,
-    marginHorizontal: Theme.spacing.m,
-    marginBottom: Theme.spacing.m,
-    padding: Theme.spacing.l,
-    borderRadius: Theme.borderRadius.l,
-    elevation: 2,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardHeader: {
+  segmentContainer: {
     flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 20,
+  },
+  segmentTab: {
+    flex: 1,
+    paddingVertical: 8,
     alignItems: 'center',
-    marginBottom: Theme.spacing.m,
+    borderRadius: 6,
   },
-  cardTitle: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.l,
-    fontWeight: Theme.typography.weights.bold,
+  segmentTabActive: {
+    backgroundColor: Theme.colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segmentTabText: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  segmentTabTextActive: {
     color: Theme.colors.text,
-    marginLeft: Theme.spacing.s,
   },
-  targetRow: {
+  simpleChartRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Theme.spacing.m,
+    alignItems: 'flex-end',
   },
-  statsLabel: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xs,
-    color: Theme.colors.textSecondary,
-    textTransform: 'uppercase',
+  simpleChartLeft: {
+    flex: 1,
+    paddingRight: 20,
   },
-  statsValue: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xl,
-    fontWeight: Theme.typography.weights.bold,
+  bigStatNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
     color: Theme.colors.text,
-    marginTop: Theme.spacing.xs,
+    marginRight: 8,
   },
-  statsValuePositive: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xl,
-    fontWeight: Theme.typography.weights.bold,
-    color: Theme.colors.success,
-    marginTop: Theme.spacing.xs,
-  },
-  progressContainer: {
-    height: 12,
-    backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.borderRadius.round,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: Theme.colors.primary,
-    borderRadius: Theme.borderRadius.round,
-  },
-  progressText: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xs,
-    color: Theme.colors.textSecondary,
-    marginTop: Theme.spacing.s,
-    textAlign: 'right',
-  },
-  noTarget: {
+  greenBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.l,
+    marginBottom: 4,
   },
-  noTargetTitle: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.m,
-    fontWeight: Theme.typography.weights.bold,
+  greenBadgeText: {
+    color: Theme.colors.accent,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  statDescription: {
+    fontSize: 12,
     color: Theme.colors.textSecondary,
-    marginTop: Theme.spacing.s,
+    lineHeight: 16,
   },
-  noTargetText: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.s,
+  simpleChartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+  barColumn: {
+    alignItems: 'center',
+  },
+  singleBar: {
+    width: 12,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  barLabel: {
+    fontSize: 10,
     color: Theme.colors.textSecondary,
     marginTop: 4,
-    textAlign: 'center',
   },
-  // Quick actions
-  sectionHeading: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.m,
-    fontWeight: Theme.typography.weights.bold,
-    color: Theme.colors.text,
-    paddingHorizontal: Theme.spacing.l,
-    paddingBottom: Theme.spacing.s,
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Theme.spacing.s,
-    paddingBottom: Theme.spacing.xl,
-  },
-  actionCard: {
-    width: '45%',
+  salesProgressCard: {
     backgroundColor: Theme.colors.white,
-    margin: '2.5%',
-    padding: Theme.spacing.m,
-    borderRadius: Theme.borderRadius.l,
-    alignItems: 'center',
-    elevation: 1,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  iconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: Theme.borderRadius.round,
+  salesProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Theme.spacing.s,
+    marginBottom: 20,
   },
-  actionText: {
-    fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.s,
-    fontWeight: Theme.typography.weights.medium,
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: Theme.colors.text,
+  },
+  monthDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7DB5F1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  monthDropdownText: {
+    color: Theme.colors.white,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  multiChartContainer: {
+    flexDirection: 'row',
+    height: 160,
+  },
+  yAxis: {
+    justifyContent: 'space-between',
+    paddingRight: 10,
+    paddingBottom: 20,
+  },
+  yAxisText: {
+    fontSize: 10,
+    color: Theme.colors.textSecondary,
+  },
+  multiBarsWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingBottom: 20,
+  },
+  multiBarColumn: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: '100%',
+  },
+  multiBarPair: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  blueBar: {
+    width: 8,
+    backgroundColor: Theme.colors.primary,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  greenBar: {
+    width: 8,
+    backgroundColor: Theme.colors.accent,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
   },
 });
