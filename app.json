@@ -34,7 +34,7 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 19
+      "versionCode": 20
     },
     "web": {
       "favicon": "./assets/favicon.png"
