@@ -25,8 +25,9 @@ import FieldVisitsScreen from '../screens/main/FieldVisitsScreen';
 import ChatListScreen from '../screens/main/ChatListScreen';
 import ChatRoomScreen from '../screens/main/ChatRoomScreen';
 import NewChatScreen from '../screens/main/NewChatScreen';
+// NOTE: Mobile "Live Map" (react-native-maps) removed — it required a Google Maps
+// API key. Employee tracking + the admin Live Map work without it.
 import CloseDealScreen from '../screens/main/CloseDealScreen';
-import LiveMapScreen from '../screens/main/LiveMapScreen';
 import PresentationHistoryScreen from '../screens/main/PresentationHistoryScreen';
 
 // Stack-only screens (detail pages)
@@ -167,11 +168,6 @@ function DrawerNavigator() {
         name="FieldVisits"
         component={FieldVisitsScreen}
         options={{ title: 'Field Visits', drawerIcon: ({ color }) => <Ionicons name="map-outline" size={22} color={color} /> }}
-      />
-      <Drawer.Screen
-        name="LiveMap"
-        component={LiveMapScreen}
-        options={{ title: 'Live Map', drawerIcon: ({ color }) => <Ionicons name="location-outline" size={22} color={color} /> }}
       />
       <Drawer.Screen
         name="ChatList"

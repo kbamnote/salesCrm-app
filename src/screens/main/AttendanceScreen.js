@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Alert, Platform
@@ -7,8 +7,12 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { attendanceApi, locationsApi } from '../../api';
 import { startBackgroundTracking, stopBackgroundTracking } from '../../services/locationTracking';
+import BackgroundLocationDisclosure from '../../components/BackgroundLocationDisclosure';
+
+const BG_CONSENT_KEY = 'bgLocationConsent'; // 'accepted' | 'declined'
 import { Theme } from '../../theme/Theme';
 
 export default function AttendanceScreen() {
@@ -23,8 +27,11 @@ export default function AttendanceScreen() {
   const [cameraRef, setCameraRef] = useState(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [, setTick] = useState(0);
+  const [showDisclosure, setShowDisclosure] = useState(false);
+  const bgConsentRef = useRef(null); // 'accepted' | 'declined' | null
 
   useEffect(() => {
+    AsyncStorage.getItem(BG_CONSENT_KEY).then((v) => { bgConsentRef.current = v; });
     requestLocationPermission();
     
     // Timer to update live duration every minute
@@ -115,6 +122,31 @@ export default function AttendanceScreen() {
     setShowCamera(type);
   };
 
+  // Show the background-location disclosure before the first punch-in (Play policy:
+  // it must precede the background-location permission request).
+  const onPunchInPress = () => {
+    if (bgConsentRef.current == null) {
+      setShowDisclosure(true);
+      return;
+    }
+    handlePunchClick('in');
+  };
+
+  const acceptDisclosure = async () => {
+    bgConsentRef.current = 'accepted';
+    await AsyncStorage.setItem(BG_CONSENT_KEY, 'accepted');
+    setShowDisclosure(false);
+    handlePunchClick('in');
+  };
+
+  const declineDisclosure = async () => {
+    // Still allow attendance — just don't start background tracking.
+    bgConsentRef.current = 'declined';
+    await AsyncStorage.setItem(BG_CONSENT_KEY, 'declined');
+    setShowDisclosure(false);
+    handlePunchClick('in');
+  };
+
   const handleCapture = async () => {
     if (!cameraRef) return;
     
@@ -157,16 +189,18 @@ export default function AttendanceScreen() {
         // that follow are coordinate-only to save battery/network).
         locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'active' })
           .catch((err) => console.log('Initial location update failed', err?.message || err));
-        // Start background tracking so we keep reporting even when the app is
-        // minimized / screen locked / another app is in use.
-        const track = await startBackgroundTracking({ prompt: true });
-        if (!track.granted) {
-          Alert.alert(
-            'Background location needed',
-            track.reason === 'background-denied'
-              ? 'Please set location permission to "Allow all the time" so your work location is shared while the app is in the background.'
-              : 'Location permission is required to track your field activity during working hours.'
-          );
+        // Start background tracking (only if the user accepted the disclosure)
+        // so we keep reporting even when the app is minimized / locked.
+        if (bgConsentRef.current === 'accepted') {
+          const track = await startBackgroundTracking({ prompt: true });
+          if (!track.granted) {
+            Alert.alert(
+              'Background location needed',
+              track.reason === 'background-denied'
+                ? 'Please set location permission to "Allow all the time" so your work location is shared while the app is in the background.'
+                : 'Location permission is required to track your field activity during working hours.'
+            );
+          }
         }
         Alert.alert('✅ Punched In!', `Location & selfie captured at ${new Date().toLocaleTimeString()}`);
       } else {
@@ -242,6 +276,7 @@ export default function AttendanceScreen() {
   }
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={Theme.colors.primary} />}
@@ -289,7 +324,7 @@ export default function AttendanceScreen() {
             {!isPunchedIn && (
               <TouchableOpacity
                 style={[styles.punchBtn, styles.punchInBtn]}
-                onPress={() => handlePunchClick('in')}
+                onPress={onPunchInPress}
                 disabled={punchingIn}
               >
                 {punchingIn ? (
@@ -364,6 +399,13 @@ export default function AttendanceScreen() {
         )}
       </View>
     </ScrollView>
+
+    <BackgroundLocationDisclosure
+      visible={showDisclosure}
+      onAccept={acceptDisclosure}
+      onDecline={declineDisclosure}
+    />
+    </>
   );
 }
 

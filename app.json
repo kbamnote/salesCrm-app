@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tapify Sales Crm",
     "slug": "salestapify",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -40,12 +40,7 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 21,
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_ANDROID_MAPS_API_KEY"
-        }
-      }
+      "versionCode": 23
     },
     "web": {
       "favicon": "./assets/favicon.png"
