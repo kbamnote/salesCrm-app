@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
 import { Theme } from '../theme/Theme';
+import LocationReporter from '../components/LocationReporter';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -23,6 +24,8 @@ import AttendanceScreen from '../screens/main/AttendanceScreen';
 import FieldVisitsScreen from '../screens/main/FieldVisitsScreen';
 import ChatListScreen from '../screens/main/ChatListScreen';
 import ChatRoomScreen from '../screens/main/ChatRoomScreen';
+import NewChatScreen from '../screens/main/NewChatScreen';
+import CloseDealScreen from '../screens/main/CloseDealScreen';
 import LiveMapScreen from '../screens/main/LiveMapScreen';
 import PresentationHistoryScreen from '../screens/main/PresentationHistoryScreen';
 
@@ -57,7 +60,7 @@ const TAB_SCREENS = [
 // Screens where we do NOT want to show the tab bar (detail/form screens)
 const HIDDEN_TAB_SCREENS = [
   'Login', 'AddLead', 'LeadDetail', 'AddClient', 'ClientDetail',
-  'PresentationForm', 'PresentationRecording', 'ChatRoom',
+  'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
@@ -233,6 +236,8 @@ export default function AppNavigator() {
               <Stack.Screen name="PresentationForm"      component={PresentationFormScreen}      options={{ headerShown: true, title: 'Start Presentation', ...headerStyle }} />
               <Stack.Screen name="PresentationRecording" component={PresentationRecordingScreen} options={{ headerShown: true, title: 'Recording', ...headerStyle }} />
               <Stack.Screen name="ChatRoom"              component={ChatRoomScreen}              options={({ route }) => ({ headerShown: true, title: route.params?.chatName || 'Chat', ...headerStyle })} />
+              <Stack.Screen name="NewChat"               component={NewChatScreen}               options={{ headerShown: true, title: 'New Chat', ...headerStyle }} />
+              <Stack.Screen name="CloseDeal"             component={CloseDealScreen}             options={{ headerShown: true, title: 'Close a Deal', ...headerStyle }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -241,6 +246,9 @@ export default function AppNavigator() {
 
         {/* GlobalTabBar uses currentRoute from onStateChange — no navigator context needed */}
         {user && <GlobalTabBar navigationRef={navigationRef} currentRoute={currentRoute} />}
+
+        {/* Headless: reports location every 5 min while punched in (renders nothing) */}
+        {user && <LocationReporter />}
       </NavigationContainer>
     </View>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { targetsApi, leadsApi, clientsApi } from '../../api';
+import { targetsApi, leadsApi, clientsApi, dealsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ export default function DashboardScreen() {
   const navigation = useNavigation();
   const [targetData, setTargetData] = useState(null);
   const [stats, setStats] = useState({ leads: 0, clients: 0 });
+  const [monthly, setMonthly] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('Overview');
@@ -19,16 +20,21 @@ export default function DashboardScreen() {
   const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
 
   const loadData = async () => {
-    const [targetRes, leadsRes, clientsRes] = await Promise.allSettled([
+    const [targetRes, leadsRes, clientsRes, monthlyRes] = await Promise.allSettled([
       targetsApi.myTarget(currentMonth),
       leadsApi.list(),
       clientsApi.list(),
+      dealsApi.monthly(6),
     ]);
 
     if (targetRes.status === 'fulfilled') {
       setTargetData(targetRes.value.data);
     } else {
       setTargetData(null);
+    }
+
+    if (monthlyRes.status === 'fulfilled') {
+      setMonthly(monthlyRes.value.data || []);
     }
 
     if (leadsRes.status === 'fulfilled') {
@@ -61,24 +67,20 @@ export default function DashboardScreen() {
   }
 
   const achieved = targetData?.achieved || 0;
-  
-  // Dummy chart data matching the UI provided
-  const simpleChartData = [
-    { label: 'Apr', value: 40 },
-    { label: 'May', value: 80 },
-    { label: 'Jun', value: 60 },
-    { label: 'Jul', value: 100 },
-  ];
+  const target = targetData?.target || 0;
+  const percentage = targetData?.percentage || 0;
+  const dealsCount = targetData?.dealsCount || 0;
+  const remaining = Math.max(target - achieved, 0);
+  const progressWidth = Math.min(percentage, 100);
+  const monthLabel = new Date().toLocaleString('default', { month: 'long' });
 
-  const salesProgressData = [
-    { label: 'Jan', blue: 30, green: 60 },
-    { label: 'Feb', blue: 45, green: 75 },
-    { label: 'Mar', blue: 20, green: 40 },
-    { label: 'Apr', blue: 50, green: 110 },
-    { label: 'May', blue: 65, green: 140, isMax: true },
-    { label: 'Jun', blue: 55, green: 90 },
-    { label: 'Jul', blue: 50, green: 80 },
-  ];
+  // Real monthly chart data — achieved (revenue) vs assigned target.
+  const CHART_HEIGHT = 140;
+  const maxVal = Math.max(...monthly.map((m) => Math.max(m.revenue, m.target || 0)), 1);
+  const hasData = monthly.some((m) => m.revenue > 0 || (m.target || 0) > 0);
+  const fmtShort = (n) =>
+    n >= 100000 ? `${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+  const barH = (v) => Math.max((v / maxVal) * (CHART_HEIGHT - 18), v > 0 ? 4 : 0);
 
   return (
     <View style={styles.container}>
@@ -113,7 +115,9 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.increaseRow}>
                 <Ionicons name="trending-up" size={14} color={Theme.colors.white} />
-                <Text style={styles.increaseText}>+1.7% This month</Text>
+                <Text style={styles.increaseText}>
+                  {target > 0 ? `${percentage}% of ₹${target.toLocaleString('en-IN')} target` : 'No target set yet'}
+                </Text>
               </View>
             </View>
           </SafeAreaView>
@@ -131,81 +135,110 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Segmented Control Card */}
+        {/* Close Deal CTA */}
+        <TouchableOpacity style={styles.closeDealBtn} onPress={() => navigation.navigate('CloseDeal')}>
+          <Ionicons name="checkmark-circle" size={22} color="#fff" />
+          <Text style={styles.closeDealText}>Close a Deal</Text>
+        </TouchableOpacity>
+
+        {/* Target Progress Card */}
         <View style={styles.analyticsCard}>
-          <View style={styles.segmentContainer}>
-            {['Overview', 'Analytic', 'Operation'].map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.segmentTab, activeTab === tab && styles.segmentTabActive]}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Text style={[styles.segmentTabText, activeTab === tab && styles.segmentTabTextActive]}>
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>{monthLabel} Target</Text>
+            <Text style={styles.percentBadge}>{percentage}%</Text>
           </View>
 
-          {/* Simple Chart Section */}
-          <View style={styles.simpleChartRow}>
-            <View style={styles.simpleChartLeft}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 4 }}>
-                <Text style={styles.bigStatNumber}>9,567</Text>
-                <View style={styles.greenBadge}>
-                  <Ionicons name="trending-up" size={12} color={Theme.colors.accent} />
-                  <Text style={styles.greenBadgeText}>1.756</Text>
-                </View>
+          {target > 0 ? (
+            <>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progressWidth}%` }]} />
               </View>
-              <Text style={styles.statDescription}>Your sales increased this month by around 56%</Text>
-            </View>
-            
-            <View style={styles.simpleChartBars}>
-              {simpleChartData.map((item, index) => (
-                <View key={index} style={styles.barColumn}>
-                  <View style={[styles.singleBar, { height: item.value }]} />
-                  <Text style={styles.barLabel}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
+              <View style={styles.targetRow}>
+                <Text style={styles.targetMuted}>Achieved: ₹{achieved.toLocaleString('en-IN')}</Text>
+                <Text style={styles.targetMuted}>Target: ₹{target.toLocaleString('en-IN')}</Text>
+              </View>
+              <Text style={styles.remainingText}>
+                {remaining > 0
+                  ? `₹${remaining.toLocaleString('en-IN')} to go`
+                  : '🎉 Target achieved!'}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.noTargetText}>
+              No target set for this month yet. Your manager can assign one.
+            </Text>
+          )}
+        </View>
+
+        {/* Real Stat Tiles */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statTile}>
+            <Ionicons name="briefcase-outline" size={22} color={Theme.colors.primary} />
+            <Text style={styles.statTileNumber}>{dealsCount}</Text>
+            <Text style={styles.statTileLabel}>Deals (Month)</Text>
+          </View>
+          <View style={styles.statTile}>
+            <Ionicons name="cash-outline" size={22} color={Theme.colors.success} />
+            <Text style={styles.statTileNumber}>₹{achieved.toLocaleString('en-IN')}</Text>
+            <Text style={styles.statTileLabel}>Revenue</Text>
+          </View>
+          <View style={styles.statTile}>
+            <Ionicons name="funnel-outline" size={22} color="#F59E0B" />
+            <Text style={styles.statTileNumber}>{stats.leads}</Text>
+            <Text style={styles.statTileLabel}>Leads</Text>
+          </View>
+          <View style={styles.statTile}>
+            <Ionicons name="people-outline" size={22} color="#8B5CF6" />
+            <Text style={styles.statTileNumber}>{stats.clients}</Text>
+            <Text style={styles.statTileLabel}>Clients</Text>
           </View>
         </View>
 
-        {/* Sales Progress Card */}
-        <View style={styles.salesProgressCard}>
-          <View style={styles.salesProgressHeader}>
-            <Text style={styles.cardTitle}>Sales Progress</Text>
-            <TouchableOpacity style={styles.monthDropdown}>
-              <Text style={styles.monthDropdownText}>Month</Text>
-              <Ionicons name="chevron-down" size={14} color={Theme.colors.white} />
-            </TouchableOpacity>
+        {/* Sales Progress Chart — achieved vs target, last 6 months */}
+        <View style={styles.chartCard}>
+          <Text style={styles.cardTitle}>Sales Progress</Text>
+          <Text style={styles.chartSub}>Achieved vs Target · last 6 months</Text>
+
+          {/* Legend */}
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: Theme.colors.success }]} />
+              <Text style={styles.legendText}>Achieved</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: Theme.colors.primary }]} />
+              <Text style={styles.legendText}>Target</Text>
+            </View>
           </View>
 
-          <View style={styles.multiChartContainer}>
-            {/* Y-Axis Labels */}
-            <View style={styles.yAxis}>
-              <Text style={styles.yAxisText}>1M</Text>
-              <Text style={styles.yAxisText}>50k</Text>
-              <Text style={styles.yAxisText}>25k</Text>
-              <Text style={styles.yAxisText}>0</Text>
-            </View>
+          {hasData ? (
+            <View style={styles.chartBody}>
+              {/* Y-axis */}
+              <View style={[styles.yAxis, { height: CHART_HEIGHT }]}>
+                <Text style={styles.yAxisText}>₹{fmtShort(maxVal)}</Text>
+                <Text style={styles.yAxisText}>₹{fmtShort(maxVal / 2)}</Text>
+                <Text style={styles.yAxisText}>0</Text>
+              </View>
 
-            {/* Bars */}
-            <View style={styles.multiBarsWrapper}>
-              {salesProgressData.map((item, index) => (
-                <View key={index} style={styles.multiBarColumn}>
-                  {item.isMax && (
-                    <Ionicons name="trophy" size={16} color="#F59E0B" style={{ marginBottom: 4 }} />
-                  )}
-                  <View style={styles.multiBarPair}>
-                    <View style={[styles.blueBar, { height: item.blue }]} />
-                    <View style={[styles.greenBar, { height: item.green }]} />
+              {/* Grouped bars */}
+              <View style={[styles.chartBars, { height: CHART_HEIGHT }]}>
+                {monthly.map((m, i) => (
+                  <View key={m.month || i} style={styles.chartCol}>
+                    <View style={styles.barPair}>
+                      <View style={[styles.chartBar, { height: barH(m.revenue), backgroundColor: Theme.colors.success }]} />
+                      <View style={[styles.chartBar, { height: barH(m.target || 0), backgroundColor: Theme.colors.primary }]} />
+                    </View>
+                    <Text style={styles.barLabel}>{m.label}</Text>
                   </View>
-                  <Text style={styles.barLabel}>{item.label}</Text>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.chartEmpty}>
+              <Ionicons name="bar-chart-outline" size={40} color={Theme.colors.border} />
+              <Text style={styles.chartEmptyText}>No deals or targets yet. Set a target and close a deal to see your progress here.</Text>
+            </View>
+          )}
         </View>
 
       </ScrollView>
@@ -309,6 +342,83 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  closeDealBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Theme.colors.success,
+    marginHorizontal: 20,
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  closeDealText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  percentBadge: { fontSize: 16, fontWeight: 'bold', color: Theme.colors.primary },
+  progressTrack: { height: 12, backgroundColor: '#EEF2F7', borderRadius: 6, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Theme.colors.success, borderRadius: 6 },
+  targetRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  targetMuted: { fontSize: 12, color: Theme.colors.textSecondary },
+  remainingText: { marginTop: 8, fontSize: 13, fontWeight: '600', color: Theme.colors.text },
+  noTargetText: { fontSize: 13, color: Theme.colors.textSecondary, lineHeight: 18 },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  statTile: {
+    width: '48%',
+    backgroundColor: Theme.colors.white,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+  },
+  statTileNumber: { fontSize: 18, fontWeight: 'bold', color: Theme.colors.text, marginTop: 8 },
+  statTileLabel: { fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2 },
+  chartCard: {
+    backgroundColor: Theme.colors.white,
+    marginHorizontal: 20,
+    marginTop: 8,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  chartSub: { fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2, marginBottom: 16 },
+  chartBody: { flexDirection: 'row' },
+  chartBars: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingLeft: 8,
+  },
+  chartCol: { alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
+  barPair: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  chartBar: { width: 10, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  barValue: { fontSize: 9, color: Theme.colors.textSecondary, marginBottom: 4 },
+  legendRow: { flexDirection: 'row', gap: 16, marginBottom: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 12, color: Theme.colors.textSecondary },
+  chartEmpty: { alignItems: 'center', paddingVertical: 20 },
+  chartEmptyText: { fontSize: 13, color: Theme.colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 18 },
   analyticsCard: {
     backgroundColor: Theme.colors.white,
     marginHorizontal: 20,

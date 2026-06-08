@@ -4,13 +4,30 @@ import {
   TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
+// Matches the backend's getChatId: the two user ids sorted and joined with '_'.
+const makeChatId = (a, b) => [String(a), String(b)].sort().join('_');
+
 export default function ChatRoomScreen({ route }) {
-  const { chatId, chatName } = route.params || {};
+  const { chatId: paramChatId, toId: paramToId, chatName } = route.params || {};
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const myId = String(user?._id || user?.id || '');
+
+  // Direct-message recipient: passed explicitly (new chat) or derived from the
+  // chatId (reopened chat — a DM chatId is "idA_idB").
+  const toId = paramToId ||
+    (paramChatId && paramChatId.includes('_')
+      ? paramChatId.split('_').find((id) => id !== myId)
+      : null);
+
+  // Resolve the chat id: use the one we were given, otherwise compute it from
+  // the recipient so a brand-new conversation can load/send immediately.
+  const chatId = paramChatId || (toId && myId ? makeChatId(myId, toId) : null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -48,7 +65,8 @@ export default function ChatRoomScreen({ route }) {
     setText('');
     setSending(true);
     try {
-      await chatApi.send({ chatId, content: msgText });
+      // Backend derives the chatId from toId (DM) or groupId — send toId.
+      await chatApi.send({ toId, content: msgText });
       await loadMessages();
     } catch (e) {
       const errMsg = e.response?.data?.message || 'Failed to send message.';
@@ -61,8 +79,9 @@ export default function ChatRoomScreen({ route }) {
 
   const isMyMessage = (msg) => {
     if (!user) return false;
-    const senderId = msg.sender?._id || msg.sender;
-    return senderId === user._id || senderId === user.id;
+    // Backend messages carry fromId/fromName.
+    const senderId = String(msg.fromId || msg.sender?._id || msg.sender || '');
+    return senderId === myId;
   };
 
   const formatTime = (dateStr) => {
@@ -73,12 +92,12 @@ export default function ChatRoomScreen({ route }) {
   const renderMessage = ({ item, index }) => {
     const isMine = isMyMessage(item);
     const prevMsg = messages[index - 1];
-    const showSender = !isMine && (!prevMsg || prevMsg.sender?._id !== item.sender?._id);
+    const showSender = !isMine && (!prevMsg || String(prevMsg.fromId) !== String(item.fromId));
 
     return (
       <View style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}>
         {showSender && (
-          <Text style={styles.senderName}>{item.sender?.name || 'Unknown'}</Text>
+          <Text style={styles.senderName}>{item.fromName || 'Unknown'}</Text>
         )}
         <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
           <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>
@@ -120,7 +139,7 @@ export default function ChatRoomScreen({ route }) {
       )}
 
       {/* Input Bar */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TextInput
           style={styles.textInput}
           placeholder="Type a message..."

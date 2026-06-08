@@ -5,20 +5,34 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { chatApi } from '../../api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { chatApi, usersApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
 export default function ChatListScreen({ navigation }) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  // Lift the FAB above the floating tab bar (its height ~58 + bottom offset).
+  const fabBottom = Math.max(insets.bottom, 10) + 84;
+  const myId = String(user?._id || user?.id || '');
   const [conversations, setConversations] = useState([]);
+  const [usersMap, setUsersMap] = useState({}); // userId -> user, for names
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
     try {
-      const res = await chatApi.conversations();
-      setConversations(res.data || []);
+      const [convRes, usersRes] = await Promise.allSettled([
+        chatApi.conversations(),
+        usersApi.contacts(),
+      ]);
+      if (convRes.status === 'fulfilled') setConversations(convRes.value.data || []);
+      if (usersRes.status === 'fulfilled') {
+        const map = {};
+        (usersRes.value.data || []).forEach((u) => { map[String(u._id)] = u; });
+        setUsersMap(map);
+      }
     } catch (e) {
       console.log('Error loading conversations', e);
     } finally {
@@ -41,15 +55,20 @@ export default function ChatListScreen({ navigation }) {
   };
 
   const renderConversation = ({ item }) => {
-    const otherUser = item.participants?.find(p => p._id !== user?._id) || {};
-    const displayName = item.name || otherUser.name || 'Chat';
-    const isGroup = item.isGroup;
-    const lastMsg = item.lastMessage;
+    // Backend shape: { _id: chatId, last: <message>, unread: <count> }.
+    const chatId = item._id;
+    const isGroup = !String(chatId).includes('_');
+    const otherId = isGroup ? null : String(chatId).split('_').find((id) => id !== myId);
+    const displayName = isGroup
+      ? (item.last?.groupName || 'Group')
+      : (usersMap[otherId]?.name || item.last?.fromName || 'Chat');
+    const lastMsg = item.last;
+    const unread = item.unread || 0;
 
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('ChatRoom', { chatId: item._id, chatName: displayName })}
+        onPress={() => navigation.navigate('ChatRoom', { chatId, toId: otherId, chatName: displayName })}
       >
         <View style={[styles.avatar, isGroup && styles.groupAvatar]}>
           {isGroup ? (
@@ -61,15 +80,15 @@ export default function ChatListScreen({ navigation }) {
         <View style={styles.cardContent}>
           <View style={styles.cardTop}>
             <Text style={styles.chatName} numberOfLines={1}>{displayName}</Text>
-            <Text style={styles.timeText}>{formatTime(lastMsg?.createdAt || item.updatedAt)}</Text>
+            <Text style={styles.timeText}>{formatTime(lastMsg?.createdAt)}</Text>
           </View>
           <View style={styles.cardBottom}>
             <Text style={styles.lastMsg} numberOfLines={1}>
-              {lastMsg ? (lastMsg.sender?.name ? `${lastMsg.sender.name}: ` : '') + lastMsg.content : 'No messages yet'}
+              {lastMsg?.content || 'No messages yet'}
             </Text>
-            {item.unreadCount > 0 && (
+            {unread > 0 && (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+                <Text style={styles.unreadText}>{unread}</Text>
               </View>
             )}
           </View>
@@ -94,10 +113,19 @@ export default function ChatListScreen({ navigation }) {
           <View style={styles.empty}>
             <Ionicons name="chatbubbles-outline" size={56} color={Theme.colors.border} />
             <Text style={styles.emptyTitle}>No conversations</Text>
-            <Text style={styles.emptyText}>Team chats will appear here</Text>
+            <Text style={styles.emptyText}>Tap the button below to start a chat</Text>
           </View>
         }
       />
+
+      {/* New chat FAB */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: fabBottom }]}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('NewChat')}
+      >
+        <Ionicons name="create-outline" size={26} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -166,6 +194,22 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   separator: { height: 1, backgroundColor: Theme.colors.border, marginLeft: 82 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyTitle: {
     fontFamily: Theme.typography.fontFamily,

@@ -51,6 +51,26 @@ export const fieldVisitsApi = {
   create: (data) => api.post('/field-visits', data),
 };
 
+export const dealsApi = {
+  // Log a closed deal from the app (broadcasts to all users server-side).
+  close: (data) => api.post('/deals/close', data),
+  stats: (month) => api.get('/deals/stats', { params: { month } }),
+  monthly: (months = 6) => api.get('/deals/monthly', { params: { months } }),
+};
+
+export const locationsApi = {
+  // Report this user's current position; backend upserts one row per user.
+  update: (data) => api.post('/locations/update', data),
+};
+
+export const notificationsApi = {
+  list: (params) => api.get('/notifications', { params }),
+  markRead: (id) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all'),
+  registerToken: (token) => api.post('/notifications/push-token', { token }),
+  removeToken: (token) => api.post('/notifications/push-token/remove', { token }),
+};
+
 export const chatApi = {
   conversations: () => api.get('/chat/conversations'),
   messages: (chatId, params) => api.get(`/chat/messages/${chatId}`, { params }),
@@ -59,6 +79,14 @@ export const chatApi = {
 
 export const usersApi = {
   list: (params) => api.get('/users', { params }),
+  // All active users company-wide (for team chat) — not hierarchy-filtered.
+  contacts: () => api.get('/users/contacts'),
+};
+
+export const profileApi = {
+  me: () => api.get('/profile/me'),
+  update: (data) => api.put('/profile/me', data), // { user: {...}, profile: {...} }
+  uploadPhoto: (photo) => api.post('/profile/me/photo', { photo }), // photo = url or base64
 };
 
 export default api;

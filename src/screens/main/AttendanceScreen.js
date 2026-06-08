@@ -7,7 +7,8 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { attendanceApi } from '../../api';
+import { attendanceApi, locationsApi } from '../../api';
+import { startBackgroundTracking, stopBackgroundTracking } from '../../services/locationTracking';
 import { Theme } from '../../theme/Theme';
 
 export default function AttendanceScreen() {
@@ -152,9 +153,28 @@ export default function AttendanceScreen() {
 
       if (type === 'in') {
         await attendanceApi.punchIn(payload);
+        // Seed the admin map immediately with location + area (background pings
+        // that follow are coordinate-only to save battery/network).
+        locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'active' })
+          .catch((err) => console.log('Initial location update failed', err?.message || err));
+        // Start background tracking so we keep reporting even when the app is
+        // minimized / screen locked / another app is in use.
+        const track = await startBackgroundTracking({ prompt: true });
+        if (!track.granted) {
+          Alert.alert(
+            'Background location needed',
+            track.reason === 'background-denied'
+              ? 'Please set location permission to "Allow all the time" so your work location is shared while the app is in the background.'
+              : 'Location permission is required to track your field activity during working hours.'
+          );
+        }
         Alert.alert('✅ Punched In!', `Location & selfie captured at ${new Date().toLocaleTimeString()}`);
       } else {
         await attendanceApi.punchOut(payload);
+        // Stop tracking and mark them offline on the admin map once the shift ends.
+        await stopBackgroundTracking();
+        locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'offline' })
+          .catch((err) => console.log('Final location update failed', err?.message || err));
         Alert.alert('👋 Punched Out!', `See you tomorrow! Time: ${new Date().toLocaleTimeString()}`);
       }
       loadData();

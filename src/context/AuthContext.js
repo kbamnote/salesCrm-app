@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../api';
+import { stopBackgroundTracking } from '../services/locationTracking';
+import { registerForPush, unregisterPush } from '../services/notifications';
 
 const AuthContext = createContext(null);
 
@@ -25,6 +27,7 @@ export function AuthProvider({ children }) {
       if (token) {
         const r = await authApi.me();
         setUser(extractUser(r.data));
+        registerForPush(); // refresh push token for the restored session
       }
     } catch (e) {
       console.log('Failed to restore token', e);
@@ -38,6 +41,7 @@ export function AuthProvider({ children }) {
     const r = await authApi.login({ email, password });
     await AsyncStorage.setItem('token', r.data.token);
     setUser(extractUser(r.data));
+    registerForPush(); // register this device for push on login
   };
 
   // Call this to force a fresh user fetch (e.g. from ProfileScreen)
@@ -51,6 +55,11 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    // Stop background location and detach this device's push token before
+    // clearing the token, so a shared tablet stops receiving the prev user's
+    // location service + notifications.
+    await stopBackgroundTracking();
+    await unregisterPush();
     await AsyncStorage.removeItem('token');
     setUser(null);
   };

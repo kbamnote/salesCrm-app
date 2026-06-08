@@ -1,18 +1,83 @@
 import React, { useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, RefreshControl, Linking
+  ScrollView, RefreshControl, Linking, Image,
+  ActivityIndicator, Alert, Modal, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
+import { profileApi } from '../../api';
+import { uploadToCloudinary } from '../../services/cloudinary';
 import { Theme } from '../../theme/Theme';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const CLOUD_NAME = 'dpreeciaf';
+const UPLOAD_PRESET = 'salescrm_attendance';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [form, setForm] = React.useState({});
+
+  const avatarUri = user?.avatar && /^(https?:|data:image)/.test(user.avatar) ? user.avatar : null;
+
+  const openEdit = () => {
+    setForm({
+      name: user?.name || '',
+      phone: user?.phone || '',
+      designation: user?.designation || '',
+      department: user?.department || user?.team || '',
+      employeeId: user?.employeeId || '',
+    });
+    setEditOpen(true);
+  };
+
+  const saveDetails = async () => {
+    setSaving(true);
+    try {
+      await profileApi.update({ user: form });
+      await refreshUser();
+      setEditOpen(false);
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not save your details.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+
+    setUploading(true);
+    try {
+      const url = await uploadToCloudinary(result.assets[0].base64, CLOUD_NAME, UPLOAD_PRESET);
+      await profileApi.uploadPhoto(url);
+      await refreshUser();
+    } catch (e) {
+      Alert.alert('Upload failed', 'Could not update your photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Re-fetch fresh user data every time the tab is visited
   useFocusEffect(
@@ -52,11 +117,22 @@ export default function ProfileScreen() {
     >
       {/* Profile Card */}
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
-          </Text>
-        </View>
+        <TouchableOpacity activeOpacity={0.8} onPress={handlePickPhoto} disabled={uploading}>
+          <View style={styles.avatar}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
+              </Text>
+            )}
+            <View style={styles.cameraBadge}>
+              {uploading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="camera" size={16} color="#fff" />}
+            </View>
+          </View>
+        </TouchableOpacity>
         <Text style={styles.name}>{user?.name || 'User'}</Text>
         {user?.role ? (
           <View style={styles.roleBadge}>
@@ -66,6 +142,11 @@ export default function ProfileScreen() {
         {department ? (
           <Text style={styles.department}>{department}</Text>
         ) : null}
+
+        <TouchableOpacity style={styles.editBtn} onPress={openEdit}>
+          <Ionicons name="create-outline" size={16} color={Theme.colors.primary} />
+          <Text style={styles.editBtnText}>Edit Details</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Contact Information */}
@@ -119,6 +200,51 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
     </ScrollView>
+
+    {/* Edit details modal */}
+    <Modal visible={editOpen} animationType="slide" transparent onRequestClose={() => setEditOpen(false)}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Details</Text>
+            <TouchableOpacity onPress={() => setEditOpen(false)}>
+              <Ionicons name="close" size={24} color={Theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ padding: Theme.spacing.l, paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {[
+              { key: 'name', label: 'Full Name', kb: 'default' },
+              { key: 'phone', label: 'Phone', kb: 'phone-pad' },
+              { key: 'designation', label: 'Designation', kb: 'default' },
+              { key: 'department', label: 'Department', kb: 'default' },
+              { key: 'employeeId', label: 'Employee ID', kb: 'default' },
+            ].map((f) => (
+              <View key={f.key} style={{ marginBottom: 14 }}>
+                <Text style={styles.fieldLabel}>{f.label}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(form[f.key] ?? '')}
+                  onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                  keyboardType={f.kb}
+                  placeholder={f.label}
+                  placeholderTextColor={Theme.colors.textSecondary}
+                />
+              </View>
+            ))}
+            <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={saveDetails} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
     </SafeAreaView>
   );
 }
@@ -195,6 +321,68 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.sizes.title,
     fontWeight: Theme.typography.weights.bold,
     color: Theme.colors.white,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Theme.colors.white,
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Theme.spacing.m,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Theme.borderRadius.round,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary,
+  },
+  editBtnText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.s,
+    fontWeight: Theme.typography.weights.bold,
+    color: Theme.colors.primary,
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: Theme.spacing.l, borderBottomWidth: 1, borderBottomColor: Theme.colors.border,
+  },
+  modalTitle: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.l,
+    fontWeight: Theme.typography.weights.bold, color: Theme.colors.text,
+  },
+  fieldLabel: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.xs,
+    color: Theme.colors.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3,
+  },
+  input: {
+    backgroundColor: Theme.colors.surface, borderRadius: Theme.borderRadius.m,
+    borderWidth: 1, borderColor: Theme.colors.border, paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m, color: Theme.colors.text,
+  },
+  saveBtn: {
+    backgroundColor: Theme.colors.primary, borderRadius: Theme.borderRadius.m,
+    paddingVertical: 15, alignItems: 'center', marginTop: Theme.spacing.m, marginBottom: 30,
+  },
+  saveBtnText: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m,
+    fontWeight: Theme.typography.weights.bold, color: '#fff',
   },
   name: {
     fontFamily: Theme.typography.fontFamily,

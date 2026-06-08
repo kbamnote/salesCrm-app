@@ -1,5 +1,9 @@
 import { registerRootComponent } from 'expo';
 
+// Registers the background location TaskManager task at startup, before the OS
+// can invoke it on a cold start. Must be imported before the app renders.
+import './src/services/locationTracking';
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
