@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { profileApi } from '../../api';
 import { uploadToCloudinary } from '../../services/cloudinary';
+import { sendLocalTestNotification, getStoredPushToken, registerForPush } from '../../services/notifications';
 import { Theme } from '../../theme/Theme';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,6 +51,27 @@ export default function ProfileScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTestNotification = async () => {
+    const res = await sendLocalTestNotification();
+    if (!res.ok) {
+      Alert.alert('Notifications blocked', 'Notification permission is off. Enable it in Settings → Apps → Tapify Sales Crm → Notifications.');
+    }
+  };
+
+  const handleShowToken = async () => {
+    let token = await getStoredPushToken();
+    if (!token) {
+      await registerForPush(); // try to (re)register
+      token = await getStoredPushToken();
+    }
+    Alert.alert(
+      'Push token',
+      token
+        ? token
+        : 'No push token yet. Make sure this is a real build (not Expo Go), notifications are allowed, and you are logged in.'
+    );
   };
 
   const handlePickPhoto = async () => {
@@ -192,6 +214,13 @@ export default function ProfileScreen() {
             value={new Date(user.createdAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })}
           />
         ) : null}
+      </View>
+
+      {/* Notification diagnostics */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        <InfoRow icon="notifications-outline" label="Send a test notification" value="Tap to test" onPress={handleTestNotification} actionIcon="chevron-forward" />
+        <InfoRow icon="key-outline" label="Show my push token" value="For delivery testing" onPress={handleShowToken} actionIcon="chevron-forward" />
       </View>
 
       {/* Sign Out */}

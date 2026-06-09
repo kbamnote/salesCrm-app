@@ -74,6 +74,31 @@ export async function registerForPush() {
   }
 }
 
+/** The Expo push token stored on this device (for diagnostics). */
+export async function getStoredPushToken() {
+  return AsyncStorage.getItem(PUSH_TOKEN_KEY);
+}
+
+/**
+ * Fire a LOCAL notification immediately. This bypasses the server + FCM, so it
+ * verifies only that notification permission + the Android channel work. If this
+ * shows but server pushes don't, the problem is delivery (token/backend/FCM),
+ * not the app's ability to display notifications.
+ */
+export async function sendLocalTestNotification() {
+  await ensureAndroidChannel();
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const req = await Notifications.requestPermissionsAsync();
+    if (req.status !== 'granted') return { ok: false, reason: 'permission-denied' };
+  }
+  await Notifications.scheduleNotificationAsync({
+    content: { title: 'Test notification ✅', body: 'If you can see this, notifications work on this device.' },
+    trigger: null, // immediately
+  });
+  return { ok: true };
+}
+
 /** Detach this device's token from the user (call on logout). */
 export async function unregisterPush() {
   try {
