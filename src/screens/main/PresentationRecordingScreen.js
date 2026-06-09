@@ -145,56 +145,64 @@ export default function PresentationRecordingScreen({ route, navigation }) {
         { 
           text: 'End & Save', 
           style: 'destructive',
-          onPress: async () => {
-            setIsProcessing(true);
-            await stopRecordingAndCleanup(false);
-            
-            try {
-              const uri = recordingUriRef.current;
-              if (!uri) throw new Error("No recording URI found");
-              
-              const selfieUri = presentationData?.selfieUri;
-              
-              // Upload audio and image concurrently
-              const [audioUrl, selfieUrl] = await Promise.all([
-                presentationService.uploadAudio(uri),
-                presentationService.uploadImage(selfieUri)
-              ]);
-              
-              // Save metadata
-              const finalDuration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : duration;
-              await presentationService.savePresentation({
-                ...presentationData,
-                duration: finalDuration,
-                audioUrl: audioUrl,
-                selfieUrl: selfieUrl,
-                localAudioUri: uri,
-              });
-
-              setIsProcessing(false);
-              Alert.alert('Success', 'Presentation recorded and saved successfully.', [
-                { text: 'OK', onPress: () => {
-                  navigation.reset({
-                    index: 0,
-                    routes: [{
-                      name: 'Root',
-                      state: {
-                        routes: [{ name: 'PresentationHistory' }],
-                        index: 0,
-                      }
-                    }],
-                  });
-                }}
-              ]);
-            } catch (error) {
-              setIsProcessing(false);
-              console.error(error);
-              Alert.alert('Upload Error', 'Failed to save the presentation. Please ensure you have a stable internet connection.');
-            }
-          }
+          onPress: () => doEndAndSave()
         }
       ]
     );
+  };
+
+  const goToHistory = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{
+        name: 'Root',
+        state: { routes: [{ name: 'PresentationHistory' }], index: 0 },
+      }],
+    });
+  };
+
+  const doEndAndSave = async () => {
+    setIsProcessing(true);
+    await stopRecordingAndCleanup(false);
+
+    const uri = recordingUriRef.current;
+    if (!uri) {
+      setIsProcessing(false);
+      Alert.alert('Error', 'No recording was found to save.');
+      return;
+    }
+
+    const finalDuration = startTimeRef.current
+      ? Math.floor((Date.now() - startTimeRef.current) / 1000)
+      : duration;
+
+    // Everything needed to upload+save, packaged so it can be retried/queued.
+    const item = {
+      localAudioUri: uri,
+      selfieUri: presentationData?.selfieUri,
+      duration: finalDuration,
+      metadata: presentationData,
+    };
+
+    try {
+      await presentationService.submitPresentation(item);
+      setIsProcessing(false);
+      Alert.alert('Success', 'Presentation recorded and saved successfully.', [
+        { text: 'OK', onPress: goToHistory },
+      ]);
+    } catch (error) {
+      // submitPresentation already saved it to the local retry queue — it is NOT lost.
+      setIsProcessing(false);
+      console.error(error);
+      Alert.alert(
+        'Saved — will upload when online',
+        'We couldn\'t reach the server, so your recording has been saved on this device and will upload automatically when your connection is back. You can also retry now.',
+        [
+          { text: 'Retry now', onPress: () => doEndAndSave() },
+          { text: 'OK', onPress: goToHistory },
+        ]
+      );
+    }
   };
 
   const formatTime = (seconds) => {

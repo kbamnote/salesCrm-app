@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Theme } from '../theme/Theme';
 import LocationReporter from '../components/LocationReporter';
+import { getRoleConfig, TAB_DEFS, DRAWER_DEFS } from '../config/roleAccess';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -28,6 +29,13 @@ import NewChatScreen from '../screens/main/NewChatScreen';
 // NOTE: Mobile "Live Map" (react-native-maps) removed — it required a Google Maps
 // API key. Employee tracking + the admin Live Map work without it.
 import CloseDealScreen from '../screens/main/CloseDealScreen';
+import DesignsScreen from '../screens/main/DesignsScreen';
+import TeamMonitorScreen from '../screens/main/TeamMonitorScreen';
+import TeamMapScreen from '../screens/main/TeamMapScreen';
+import SetTargetScreen from '../screens/main/SetTargetScreen';
+import OnboardingScreen from '../screens/main/OnboardingScreen';
+import OfferLetterScreen from '../screens/main/OfferLetterScreen';
+import AgreementScreen from '../screens/main/AgreementScreen';
 import PresentationHistoryScreen from '../screens/main/PresentationHistoryScreen';
 
 // Stack-only screens (detail pages)
@@ -50,13 +58,28 @@ const headerStyle = {
   },
 };
 
-// Tab screens: screen name → icon set
-const TAB_SCREENS = [
-  { name: 'Dashboard', active: 'home',   inactive: 'home-outline'   },
-  { name: 'Leads',     active: 'funnel', inactive: 'funnel-outline' },
-  { name: 'Clients',   active: 'people', inactive: 'people-outline' },
-  { name: 'Profile',   active: 'person', inactive: 'person-outline' },
-];
+// Components available as bottom tabs / drawer items (keyed by screen name).
+const TAB_COMPONENTS = {
+  Dashboard: DashboardScreen,
+  Leads: LeadsScreen,
+  Clients: ClientsScreen,
+  Profile: ProfileScreen,
+  TeamMonitor: TeamMonitorScreen,
+  TeamMap: TeamMapScreen,
+  Onboarding: OnboardingScreen,
+  Designs: DesignsScreen,
+};
+const DRAWER_COMPONENTS = {
+  TeamMonitor: TeamMonitorScreen,
+  Targets: SetTargetScreen,
+  OfferLetter: OfferLetterScreen,
+  Agreement: AgreementScreen,
+  Attendance: AttendanceScreen,
+  FieldVisits: FieldVisitsScreen,
+  Designs: DesignsScreen,
+  ChatList: ChatListScreen,
+  PresentationHistory: PresentationHistoryScreen,
+};
 
 // Screens where we do NOT want to show the tab bar (detail/form screens)
 const HIDDEN_TAB_SCREENS = [
@@ -65,7 +88,7 @@ const HIDDEN_TAB_SCREENS = [
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
-function GlobalTabBar({ navigationRef, currentRoute }) {
+function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
   const insets = useSafeAreaInsets();
   const bottomOffset = Math.max(insets.bottom, 10) + 10;
 
@@ -99,7 +122,7 @@ function GlobalTabBar({ navigationRef, currentRoute }) {
       paddingHorizontal: 8,
       zIndex: 999,
     }}>
-      {TAB_SCREENS.map((tab) => {
+      {tabs.map((tab) => {
         const isFocused = currentRoute === tab.name;
         return (
           <TouchableOpacity
@@ -130,20 +153,24 @@ function GlobalTabBar({ navigationRef, currentRoute }) {
   );
 }
 
-/** Inner tabs (no visible tab bar — handled by GlobalTabBar) */
+/** Inner tabs (no visible tab bar — handled by GlobalTabBar). Role-driven. */
 const InnerStack = createNativeStackNavigator();
 function HomeStack() {
+  const { user } = useAuth();
+  const cfg = getRoleConfig(user?.role);
   return (
-    <InnerStack.Navigator screenOptions={{ headerShown: false }}>
-      <InnerStack.Screen name="Dashboard" component={DashboardScreen} />
-      <InnerStack.Screen name="Leads"     component={LeadsScreen}     />
-      <InnerStack.Screen name="Clients"   component={ClientsScreen}   />
-      <InnerStack.Screen name="Profile"   component={ProfileScreen}   />
+    <InnerStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={cfg.landing}>
+      {cfg.tabs.map((name) => {
+        const Comp = TAB_COMPONENTS[name];
+        return Comp ? <InnerStack.Screen key={name} name={name} component={Comp} /> : null;
+      })}
     </InnerStack.Navigator>
   );
 }
 
 function DrawerNavigator() {
+  const { user } = useAuth();
+  const cfg = getRoleConfig(user?.role);
   return (
     <Drawer.Navigator
       screenOptions={{
@@ -157,36 +184,43 @@ function DrawerNavigator() {
       <Drawer.Screen
         name="Home"
         component={HomeStack}
-        options={{ headerShown: false, title: 'Dashboard', drawerIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} /> }}
+        options={{ headerShown: false, title: 'Home', drawerIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} /> }}
       />
-      <Drawer.Screen
-        name="Attendance"
-        component={AttendanceScreen}
-        options={{ title: 'My Attendance', drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} /> }}
-      />
-      <Drawer.Screen
-        name="FieldVisits"
-        component={FieldVisitsScreen}
-        options={{ title: 'Field Visits', drawerIcon: ({ color }) => <Ionicons name="map-outline" size={22} color={color} /> }}
-      />
-      <Drawer.Screen
-        name="ChatList"
-        component={ChatListScreen}
-        options={{ title: 'Team Chat', drawerIcon: ({ color }) => <Ionicons name="chatbubbles-outline" size={22} color={color} /> }}
-      />
-      <Drawer.Screen
-        name="PresentationHistory"
-        component={PresentationHistoryScreen}
-        options={({ navigation }) => ({
-          title: 'Presentations',
-          drawerIcon: ({ color }) => <Ionicons name="mic-outline" size={22} color={color} />,
-          headerRight: () => (
-            <TouchableOpacity onPress={() => navigation.navigate('PresentationForm')} style={{ marginRight: 16 }}>
-              <Ionicons name="add" size={28} color={Theme.colors.white} />
-            </TouchableOpacity>
-          ),
-        })}
-      />
+      {cfg.drawer.map((name) => {
+        const Comp = DRAWER_COMPONENTS[name];
+        const def = DRAWER_DEFS[name];
+        if (!Comp || !def) return null;
+        const baseIcon = ({ color }) => <Ionicons name={def.icon} size={22} color={color} />;
+
+        // Presentations has an extra "+" header action.
+        if (name === 'PresentationHistory') {
+          return (
+            <Drawer.Screen
+              key={name}
+              name={name}
+              component={Comp}
+              options={({ navigation }) => ({
+                title: def.title,
+                drawerIcon: baseIcon,
+                headerRight: () => (
+                  <TouchableOpacity onPress={() => navigation.navigate('PresentationForm')} style={{ marginRight: 16 }}>
+                    <Ionicons name="add" size={28} color={Theme.colors.white} />
+                  </TouchableOpacity>
+                ),
+              })}
+            />
+          );
+        }
+
+        return (
+          <Drawer.Screen
+            key={name}
+            name={name}
+            component={Comp}
+            options={{ title: def.title, drawerIcon: baseIcon }}
+          />
+        );
+      })}
     </Drawer.Navigator>
   );
 }
@@ -194,7 +228,9 @@ function DrawerNavigator() {
 export default function AppNavigator() {
   const { user, loading } = useAuth();
   const navigationRef = useRef(null);
-  const [currentRoute, setCurrentRoute] = useState('Dashboard');
+  const roleCfg = getRoleConfig(user?.role);
+  const tabs = roleCfg.tabs.map((name) => ({ name, ...TAB_DEFS[name] }));
+  const [currentRoute, setCurrentRoute] = useState(roleCfg.landing);
 
   const onReady = () => {
     if (navigationRef.current) {
@@ -234,6 +270,7 @@ export default function AppNavigator() {
               <Stack.Screen name="ChatRoom"              component={ChatRoomScreen}              options={({ route }) => ({ headerShown: true, title: route.params?.chatName || 'Chat', ...headerStyle })} />
               <Stack.Screen name="NewChat"               component={NewChatScreen}               options={{ headerShown: true, title: 'New Chat', ...headerStyle }} />
               <Stack.Screen name="CloseDeal"             component={CloseDealScreen}             options={{ headerShown: true, title: 'Close a Deal', ...headerStyle }} />
+              <Stack.Screen name="TeamMap"               component={TeamMapScreen}               options={{ headerShown: true, title: 'Team Map', ...headerStyle }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -241,7 +278,7 @@ export default function AppNavigator() {
         </Stack.Navigator>
 
         {/* GlobalTabBar uses currentRoute from onStateChange — no navigator context needed */}
-        {user && <GlobalTabBar navigationRef={navigationRef} currentRoute={currentRoute} />}
+        {user && <GlobalTabBar navigationRef={navigationRef} currentRoute={currentRoute} tabs={tabs} />}
 
         {/* Headless: reports location every 5 min while punched in (renders nothing) */}
         {user && <LocationReporter />}

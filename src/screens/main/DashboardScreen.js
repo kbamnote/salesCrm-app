@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { targetsApi, leadsApi, clientsApi, dealsApi } from '../../api';
+import { can } from '../../config/roleAccess';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -135,11 +136,13 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Close Deal CTA */}
-        <TouchableOpacity style={styles.closeDealBtn} onPress={() => navigation.navigate('CloseDeal')}>
-          <Ionicons name="checkmark-circle" size={22} color="#fff" />
-          <Text style={styles.closeDealText}>Close a Deal</Text>
-        </TouchableOpacity>
+        {/* Close Deal CTA — only for roles that close deals */}
+        {can(user?.role, 'closeDeal') && (
+          <TouchableOpacity style={styles.closeDealBtn} onPress={() => navigation.navigate('CloseDeal')}>
+            <Ionicons name="checkmark-circle" size={22} color="#fff" />
+            <Text style={styles.closeDealText}>Close a Deal</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Target Progress Card */}
         <View style={styles.analyticsCard}>

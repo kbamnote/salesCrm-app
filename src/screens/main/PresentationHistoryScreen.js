@@ -13,6 +13,8 @@ export default function PresentationHistoryScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [sound, setSound] = useState(null);
   const [playingId, setPlayingId] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const { user, refreshUser } = useAuth();
 
   useEffect(() => {
@@ -73,9 +75,27 @@ export default function PresentationHistoryScreen({ navigation }) {
     }
   };
 
+  // Retry any presentations that failed to upload earlier, then refresh the list.
+  const flushAndFetch = async ({ announce = true } = {}) => {
+    setRetrying(true);
+    try {
+      const res = await presentationService.flushPending();
+      if (announce && res?.sent > 0) {
+        Alert.alert('Uploaded', `${res.sent} pending presentation${res.sent !== 1 ? 's' : ''} uploaded successfully.`);
+      }
+    } catch (_) { /* keep queued for next time */ }
+    // Update the pending badge from whatever remains in the queue.
+    try {
+      const remaining = await presentationService.getPending();
+      setPendingCount(remaining.length);
+    } catch (_) {}
+    setRetrying(false);
+    fetchPresentations();
+  };
+
   useFocusEffect(
     useCallback(() => {
-      fetchPresentations();
+      flushAndFetch();
       refreshUser();
     }, [])
   );
@@ -118,6 +138,23 @@ export default function PresentationHistoryScreen({ navigation }) {
   const renderHeader = () => {
     return (
       <View style={styles.pptContainer}>
+        {pendingCount > 0 && (
+          <View style={styles.pendingBanner}>
+            <Ionicons name="cloud-upload-outline" size={20} color="#92400E" />
+            <Text style={styles.pendingText}>
+              {pendingCount} recording{pendingCount !== 1 ? 's' : ''} waiting to upload
+            </Text>
+            <TouchableOpacity
+              style={styles.pendingRetryBtn}
+              onPress={() => flushAndFetch({ announce: true })}
+              disabled={retrying}
+            >
+              {retrying
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.pendingRetryText}>Retry</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
         <Text style={styles.sectionTitle}>Assigned Materials (PPTs)</Text>
         {(!user?.ppts || user.ppts.length === 0) ? (
           <Text style={{ color: Theme.colors.textSecondary || '#666', marginBottom: 12 }}>
@@ -172,6 +209,33 @@ const styles = StyleSheet.create({
   pptContainer: {
     marginBottom: 16,
   },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  pendingText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  pendingRetryBtn: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    minWidth: 64,
+    alignItems: 'center',
+  },
+  pendingRetryText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',

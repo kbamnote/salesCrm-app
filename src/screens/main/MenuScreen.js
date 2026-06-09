@@ -30,6 +30,12 @@ export default function MenuScreen({ navigation }) {
           onPress={() => navigation.navigate('ChatList')} 
         />
         <MenuCard
+          icon="images-outline"
+          title="Designs"
+          color="#F59E0B"
+          onPress={() => navigation.navigate('Designs')}
+        />
+        <MenuCard
           icon="mic-outline"
           title="Presentations"
           color="#EC4899" 

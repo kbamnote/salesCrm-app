@@ -37,6 +37,8 @@ export const leadsApi = {
 
 export const targetsApi = {
   myTarget: (month) => api.get('/targets/my', { params: { month } }),
+  list: (params) => api.get('/targets', { params }),
+  set: (data) => api.post('/targets', data), // { userId, month, target } — HR/manager/admin
 };
 
 export const attendanceApi = {
@@ -44,6 +46,8 @@ export const attendanceApi = {
   today: () => api.get('/attendance/today'),
   punchIn: (data) => api.post('/attendance/punch-in', data),
   punchOut: (data) => api.post('/attendance/punch-out', data),
+  // Oversight: all team attendance for a given date (admin/manager/hr only).
+  byDate: (date) => api.get('/attendance', { params: { date } }),
 };
 
 export const fieldVisitsApi = {
@@ -58,9 +62,25 @@ export const dealsApi = {
   monthly: (months = 6) => api.get('/deals/monthly', { params: { months } }),
 };
 
+export const designsApi = {
+  list: () => api.get('/designs'),
+};
+
+export const offerLetterApi = {
+  designations: () => api.get('/offer-letter/designations'),
+  generate: (data) => api.post('/offer-letter', data), // returns { filename, base64 }
+};
+
+export const agreementApi = {
+  designations: () => api.get('/agreement/designations'),
+  generate: (data) => api.post('/agreement', data), // returns { filename, base64 }
+};
+
 export const locationsApi = {
   // Report this user's current position; backend upserts one row per user.
   update: (data) => api.post('/locations/update', data),
+  // Oversight: latest location of every visible team member.
+  list: () => api.get('/locations'),
 };
 
 export const notificationsApi = {
@@ -81,6 +101,8 @@ export const usersApi = {
   list: (params) => api.get('/users', { params }),
   // All active users company-wide (for team chat) — not hierarchy-filtered.
   contacts: () => api.get('/users/contacts'),
+  // Onboard a new employee (admin/manager/bdo/team_leader/hr).
+  create: (data) => api.post('/users', data),
 };
 
 export const profileApi = {
