@@ -8,9 +8,9 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
-import { profileApi } from '../../api';
+import { profileApi, notificationsApi } from '../../api';
 import { uploadToCloudinary } from '../../services/cloudinary';
-import { sendLocalTestNotification, getStoredPushToken, registerForPush } from '../../services/notifications';
+import { getStoredPushToken, registerForPush } from '../../services/notifications';
 import { Theme } from '../../theme/Theme';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,9 +54,24 @@ export default function ProfileScreen() {
   };
 
   const handleTestNotification = async () => {
-    const res = await sendLocalTestNotification();
-    if (!res.ok) {
-      Alert.alert('Notifications blocked', 'Notification permission is off. Enable it in Settings → Apps → Tapify Sales Crm → Notifications.');
+    try {
+      // Re-register push token first to ensure server has it
+      await registerForPush();
+      const res = await notificationsApi.testPush();
+      Alert.alert(
+        'Push sent!',
+        `A real push notification was sent through the server. You have ${res.data?.tokens || 0} device(s) registered.`
+      );
+    } catch (e) {
+      const msg = e.response?.data?.error || e.message;
+      if (msg.includes('No push tokens')) {
+        Alert.alert(
+          'No push token',
+          'Your device has no push token registered on the server. Try logging out and back in. Make sure this is a real build (not Expo Go) and notifications are allowed.'
+        );
+      } else {
+        Alert.alert('Push test failed', msg);
+      }
     }
   };
 
@@ -219,7 +234,7 @@ export default function ProfileScreen() {
       {/* Notification diagnostics */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notifications</Text>
-        <InfoRow icon="notifications-outline" label="Send a test notification" value="Tap to test" onPress={handleTestNotification} actionIcon="chevron-forward" />
+        <InfoRow icon="notifications-outline" label="Send a server push test" value="Tests real push delivery" onPress={handleTestNotification} actionIcon="chevron-forward" />
         <InfoRow icon="key-outline" label="Show my push token" value="For delivery testing" onPress={handleShowToken} actionIcon="chevron-forward" />
       </View>
 

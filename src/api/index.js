@@ -38,6 +38,7 @@ export const leadsApi = {
 export const targetsApi = {
   myTarget: (month) => api.get('/targets/my', { params: { month } }),
   list: (params) => api.get('/targets', { params }),
+  team: (month) => api.get('/targets/team', { params: { month } }),
   set: (data) => api.post('/targets', data), // { userId, month, target } — HR/manager/admin
 };
 
@@ -89,12 +90,16 @@ export const notificationsApi = {
   markAllRead: () => api.post('/notifications/read-all'),
   registerToken: (token) => api.post('/notifications/push-token', { token }),
   removeToken: (token) => api.post('/notifications/push-token/remove', { token }),
+  testPush: () => api.post('/notifications/test-push'),
 };
 
 export const chatApi = {
   conversations: () => api.get('/chat/conversations'),
   messages: (chatId, params) => api.get(`/chat/messages/${chatId}`, { params }),
   send: (data) => api.post('/chat/send', data),
+  groups: () => api.get('/chat/groups'),
+  groupDetail: (id) => api.get(`/chat/groups/${id}`),
+  createGroup: (data) => api.post('/chat/groups', data),
 };
 
 export const usersApi = {
@@ -103,6 +108,20 @@ export const usersApi = {
   contacts: () => api.get('/users/contacts'),
   // Onboard a new employee (admin/manager/bdo/team_leader/hr).
   create: (data) => api.post('/users', data),
+};
+
+export const hrDashboardApi = {
+  stats: (month) => api.get('/hr-dashboard/stats', { params: { month } }),
+};
+
+export const callsApi = {
+  list: () => api.get('/calls'),
+  create: (data) => api.post('/calls', data),
+  update: (id, data) => api.put(`/calls/${id}`, data),
+};
+
+export const telecallerDashApi = {
+  stats: () => api.get('/telecaller-dashboard/stats'),
 };
 
 export const profileApi = {

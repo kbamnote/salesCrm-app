@@ -68,7 +68,12 @@ export default function ChatListScreen({ navigation }) {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('ChatRoom', { chatId, toId: otherId, chatName: displayName })}
+        onPress={() => navigation.navigate('ChatRoom', {
+          chatId,
+          toId: isGroup ? undefined : otherId,
+          chatName: displayName,
+          groupId: isGroup ? chatId : undefined,
+        })}
       >
         <View style={[styles.avatar, isGroup && styles.groupAvatar]}>
           {isGroup ? (
@@ -84,7 +89,9 @@ export default function ChatListScreen({ navigation }) {
           </View>
           <View style={styles.cardBottom}>
             <Text style={styles.lastMsg} numberOfLines={1}>
-              {lastMsg?.content || 'No messages yet'}
+              {lastMsg?.type === 'image' ? '📷 Photo'
+                : lastMsg?.type === 'voice' ? '🎤 Voice note'
+                : (lastMsg?.content || 'No messages yet')}
             </Text>
             {unread > 0 && (
               <View style={styles.unreadBadge}>

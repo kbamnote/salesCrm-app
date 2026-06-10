@@ -4,9 +4,8 @@ import {
   ActivityIndicator, RefreshControl, Linking, TextInput, Alert, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useFocusEffect, DrawerActions } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { usersApi, locationsApi, attendanceApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 
@@ -186,24 +185,19 @@ export default function TeamMonitorScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center} edges={['top']}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color={Theme.colors.primary} />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity
-          style={styles.menuBtn}
-          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-        >
-          <Ionicons name="menu" size={26} color={Theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Monitor Team</Text>
+    <View style={styles.container}>
+      {/* Date picker button */}
+      <View style={styles.dateRow}>
         <TouchableOpacity style={styles.calIconBtn} onPress={() => setShowPicker(true)}>
-          <Ionicons name={isToday ? 'calendar-outline' : 'calendar'} size={24} color={Theme.colors.primary} />
+          <Ionicons name={isToday ? 'calendar-outline' : 'calendar'} size={22} color={Theme.colors.primary} />
+          <Text style={styles.calLabel}>{isToday ? 'Today' : dateLabel()}</Text>
         </TouchableOpacity>
       </View>
 
@@ -279,30 +273,28 @@ export default function TeamMonitorScreen({ navigation }) {
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.surface },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Theme.colors.surface },
-  titleRow: {
+  dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'flex-end',
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 4,
   },
-  menuBtn: { padding: 4 },
-  screenTitle: {
-    flex: 1,
+  calIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 6 },
+  calLabel: {
     fontFamily: Theme.typography.fontFamily,
-    fontSize: Theme.typography.sizes.xl,
+    fontSize: Theme.typography.sizes.s,
     fontWeight: Theme.typography.weights.bold,
-    color: Theme.colors.text,
+    color: Theme.colors.primary,
   },
-  calIconBtn: { padding: 6 },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',

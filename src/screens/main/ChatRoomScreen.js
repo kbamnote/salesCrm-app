@@ -1,38 +1,101 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert
+  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
+  Alert, Image, Modal, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { chatApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
-// Matches the backend's getChatId: the two user ids sorted and joined with '_'.
+const CLOUD_NAME = 'dpreeciaf';
+const UPLOAD_PRESET = 'salescrm_attendance';
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}`;
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const makeChatId = (a, b) => [String(a), String(b)].sort().join('_');
 
-export default function ChatRoomScreen({ route }) {
-  const { chatId: paramChatId, toId: paramToId, chatName } = route.params || {};
+const uploadToCloudinary = async (uri, resourceType = 'image') => {
+  const formData = new FormData();
+  const ext = uri.split('.').pop() || (resourceType === 'video' ? 'm4a' : 'jpg');
+  const mimeType = resourceType === 'video' ? 'audio/m4a' : `image/${ext}`;
+  formData.append('file', { uri, type: mimeType, name: `upload.${ext}` });
+  formData.append('upload_preset', UPLOAD_PRESET);
+  const res = await fetch(`${CLOUDINARY_URL}/${resourceType}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json();
+  if (!data.secure_url) throw new Error(data.error?.message || 'Upload failed');
+  return data.secure_url;
+};
+
+export default function ChatRoomScreen({ route, navigation }) {
+  const { chatId: paramChatId, toId: paramToId, chatName, groupId: paramGroupId } = route.params || {};
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const myId = String(user?._id || user?.id || '');
 
-  // Direct-message recipient: passed explicitly (new chat) or derived from the
-  // chatId (reopened chat — a DM chatId is "idA_idB").
-  const toId = paramToId ||
+  const isGroup = !!(paramGroupId || (paramChatId && !String(paramChatId).includes('_')));
+  const groupId = paramGroupId || (isGroup ? paramChatId : null);
+
+  const toId = isGroup ? null : (paramToId ||
     (paramChatId && paramChatId.includes('_')
       ? paramChatId.split('_').find((id) => id !== myId)
-      : null);
+      : null));
 
-  // Resolve the chat id: use the one we were given, otherwise compute it from
-  // the recipient so a brand-new conversation can load/send immediately.
-  const chatId = paramChatId || (toId && myId ? makeChatId(myId, toId) : null);
+  const chatId = paramChatId || (groupId ? groupId : (toId && myId ? makeChatId(myId, toId) : null));
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
   const flatListRef = useRef(null);
+
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimer = useRef(null);
+
+  const [playingId, setPlayingId] = useState(null);
+  const soundRef = useRef(null);
+
+  const [previewImage, setPreviewImage] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const [showMembers, setShowMembers] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+
+  useEffect(() => {
+    if (isGroup && groupId) {
+      navigation.setOptions({
+        headerRight: () => (
+          <TouchableOpacity onPress={openMembersModal} style={{ marginRight: 12 }}>
+            <Ionicons name="people" size={22} color="#fff" />
+          </TouchableOpacity>
+        ),
+      });
+    }
+  }, [isGroup, groupId, navigation]);
+
+  const openMembersModal = async () => {
+    setShowMembers(true);
+    if (groupMembers.length > 0) return;
+    setMembersLoading(true);
+    try {
+      const res = await chatApi.groupDetail(groupId);
+      setGroupMembers(res.data?.members || []);
+    } catch (e) {
+      console.log('Error loading group members', e);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
 
   const loadMessages = useCallback(async () => {
     if (!chatId) { setLoading(false); return; }
@@ -48,7 +111,6 @@ export default function ChatRoomScreen({ route }) {
 
   useEffect(() => {
     loadMessages();
-    // Poll every 5 seconds
     const interval = setInterval(loadMessages, 5000);
     return () => clearInterval(interval);
   }, [loadMessages]);
@@ -59,14 +121,22 @@ export default function ChatRoomScreen({ route }) {
     }
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
+      if (recording) recording.stopAndUnloadAsync().catch(() => {});
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+    };
+  }, []);
+
   const handleSend = async () => {
     if (!text.trim()) return;
     const msgText = text.trim();
     setText('');
     setSending(true);
     try {
-      // Backend derives the chatId from toId (DM) or groupId — send toId.
-      await chatApi.send({ toId, content: msgText });
+      const payload = isGroup ? { groupId, content: msgText } : { toId, content: msgText };
+      await chatApi.send(payload);
       await loadMessages();
     } catch (e) {
       const errMsg = e.response?.data?.message || 'Failed to send message.';
@@ -77,9 +147,136 @@ export default function ChatRoomScreen({ route }) {
     }
   };
 
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        return Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        allowsEditing: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setUploading(true);
+      const url = await uploadToCloudinary(asset.uri, 'image');
+      const payload = isGroup
+        ? { groupId, content: url, type: 'image' }
+        : { toId, content: url, type: 'image' };
+      await chatApi.send(payload);
+      await loadMessages();
+    } catch (e) {
+      Alert.alert('Error', 'Could not send image. Please try again.');
+      console.log('Image send error', e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        return Alert.alert('Permission needed', 'Please allow microphone access to record voice notes.');
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording: rec } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(rec);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration((d) => d + 1);
+      }, 1000);
+    } catch (e) {
+      Alert.alert('Error', 'Could not start recording.');
+      console.log('Recording start error', e);
+    }
+  };
+
+  const cancelRecording = async () => {
+    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    setIsRecording(false);
+    setRecordingDuration(0);
+    if (recording) {
+      try { await recording.stopAndUnloadAsync(); } catch (_) {}
+      setRecording(null);
+    }
+  };
+
+  const stopAndSendRecording = async () => {
+    if (recordingTimer.current) clearInterval(recordingTimer.current);
+    const duration = recordingDuration;
+    setIsRecording(false);
+    setRecordingDuration(0);
+    if (!recording) return;
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (!uri) return;
+      setUploading(true);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const url = await uploadToCloudinary(uri, 'video');
+      const payload = isGroup
+        ? { groupId, content: url, type: 'voice' }
+        : { toId, content: url, type: 'voice' };
+      payload.duration = duration;
+      await chatApi.send(payload);
+      await loadMessages();
+    } catch (e) {
+      Alert.alert('Error', 'Could not send voice note. Please try again.');
+      console.log('Voice send error', e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const playVoice = async (url, msgId) => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      if (playingId === msgId) {
+        setPlayingId(null);
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+      const { sound } = await Audio.Sound.createAsync({ uri: url });
+      soundRef.current = sound;
+      setPlayingId(msgId);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setPlayingId(null);
+          sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
+        }
+      });
+      await sound.playAsync();
+    } catch (e) {
+      console.log('Play error', e);
+      setPlayingId(null);
+    }
+  };
+
+  const formatDuration = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const isMyMessage = (msg) => {
     if (!user) return false;
-    // Backend messages carry fromId/fromName.
     const senderId = String(msg.fromId || msg.sender?._id || msg.sender || '');
     return senderId === myId;
   };
@@ -87,6 +284,63 @@ export default function ChatRoomScreen({ route }) {
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderMessageContent = (item, isMine) => {
+    const msgType = item.type || 'text';
+
+    if (msgType === 'image') {
+      return (
+        <TouchableOpacity onPress={() => setPreviewImage(item.content)} activeOpacity={0.8}>
+          <Image
+            source={{ uri: item.content }}
+            style={styles.imageMsg}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+      );
+    }
+
+    if (msgType === 'voice') {
+      const msgId = item._id || item.content;
+      const isPlaying = playingId === msgId;
+      return (
+        <TouchableOpacity
+          style={styles.voiceMsg}
+          onPress={() => playVoice(item.content, msgId)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={isPlaying ? 'pause' : 'play'}
+            size={22}
+            color={isMine ? '#fff' : Theme.colors.primary}
+          />
+          <View style={styles.voiceWave}>
+            {[...Array(12)].map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: 6 + Math.random() * 14,
+                    backgroundColor: isMine ? 'rgba(255,255,255,0.6)' : 'rgba(99,102,241,0.4)',
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.voiceDuration, isMine && { color: 'rgba(255,255,255,0.8)' }]}>
+            {formatDuration(item.duration || 0)}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>
+        {item.content}
+      </Text>
+    );
   };
 
   const renderMessage = ({ item, index }) => {
@@ -99,10 +353,12 @@ export default function ChatRoomScreen({ route }) {
         {showSender && (
           <Text style={styles.senderName}>{item.fromName || 'Unknown'}</Text>
         )}
-        <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleOther]}>
-          <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>
-            {item.content}
-          </Text>
+        <View style={[
+          styles.bubble,
+          isMine ? styles.bubbleMine : styles.bubbleOther,
+          (item.type === 'image') && styles.imageBubble,
+        ]}>
+          {renderMessageContent(item, isMine)}
           <Text style={[styles.bubbleTime, isMine && styles.bubbleTimeMine]}>
             {formatTime(item.createdAt)}
           </Text>
@@ -118,8 +374,8 @@ export default function ChatRoomScreen({ route }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
     >
       {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -138,31 +394,127 @@ export default function ChatRoomScreen({ route }) {
         />
       )}
 
-      {/* Input Bar */}
-      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Type a message..."
-          placeholderTextColor={Theme.colors.textSecondary}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={1000}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!text.trim() || sending}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
+      {uploading && (
+        <View style={styles.uploadingBar}>
+          <ActivityIndicator size="small" color={Theme.colors.primary} />
+          <Text style={styles.uploadingText}>Sending...</Text>
+        </View>
+      )}
+
+      {isRecording ? (
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <TouchableOpacity style={styles.cancelRecordBtn} onPress={cancelRecording}>
+            <Ionicons name="trash-outline" size={22} color="#EF4444" />
+          </TouchableOpacity>
+          <View style={styles.recordingIndicator}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingTime}>{formatDuration(recordingDuration)}</Text>
+          </View>
+          <TouchableOpacity style={styles.sendRecordBtn} onPress={stopAndSendRecording}>
             <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <TouchableOpacity style={styles.attachBtn} onPress={pickImage} disabled={uploading}>
+            <Ionicons name="image-outline" size={24} color={Theme.colors.primary} />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Type a message..."
+            placeholderTextColor={Theme.colors.textSecondary}
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={1000}
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
+          />
+          {text.trim() ? (
+            <TouchableOpacity
+              style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.micBtn}
+              onPress={startRecording}
+              disabled={uploading}
+            >
+              <Ionicons name="mic" size={24} color={Theme.colors.primary} />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+      )}
+
+      {/* Group members modal */}
+      <Modal visible={showMembers} transparent animationType="slide">
+        <View style={styles.membersOverlay}>
+          <View style={styles.membersSheet}>
+            <View style={styles.membersHeader}>
+              <Text style={styles.membersTitle}>Group Members</Text>
+              <TouchableOpacity onPress={() => setShowMembers(false)}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            {membersLoading ? (
+              <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 30 }} />
+            ) : (
+              <FlatList
+                data={groupMembers}
+                keyExtractor={(item) => String(item._id)}
+                renderItem={({ item }) => {
+                  const isMe = String(item._id) === myId;
+                  return (
+                    <View style={styles.memberRow}>
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.memberAvatarText}>
+                          {(item.name || 'U').substring(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>
+                          {item.name}{isMe ? ' (You)' : ''}
+                        </Text>
+                        {item.role ? (
+                          <Text style={styles.memberRole}>{item.role}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                }}
+                ItemSeparatorComponent={() => <View style={styles.memberSep} />}
+                ListEmptyComponent={
+                  <Text style={styles.membersEmpty}>No members found</Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full-screen image preview */}
+      <Modal visible={!!previewImage} transparent animationType="fade">
+        <View style={styles.previewOverlay}>
+          <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewImage(null)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {previewImage && (
+            <Image
+              source={{ uri: previewImage }}
+              style={styles.previewImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -170,11 +522,7 @@ export default function ChatRoomScreen({ route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F0F2F5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: Theme.typography.sizes.l,
@@ -221,6 +569,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
   },
+  imageBubble: {
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 6,
+    overflow: 'hidden',
+  },
   bubbleText: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: Theme.typography.sizes.m,
@@ -236,15 +590,45 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bubbleTimeMine: { color: 'rgba(255,255,255,0.7)' },
+  imageMsg: {
+    width: SCREEN_WIDTH * 0.55,
+    height: SCREEN_WIDTH * 0.55,
+    borderRadius: 14,
+  },
+  voiceMsg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 160,
+  },
+  voiceWave: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    height: 24,
+  },
+  waveBar: { width: 3, borderRadius: 2 },
+  voiceDuration: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Theme.spacing.m,
+    paddingHorizontal: 8,
     paddingVertical: Theme.spacing.s,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: Theme.colors.border,
-    gap: 10,
+    gap: 6,
+  },
+  attachBtn: {
+    width: 40,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textInput: {
     flex: 1,
@@ -269,4 +653,152 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnDisabled: { backgroundColor: Theme.colors.textSecondary },
+  micBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelRecordBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordingIndicator: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  recordingTime: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.l,
+    fontWeight: Theme.typography.weights.bold,
+    color: '#EF4444',
+  },
+  sendRecordBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    backgroundColor: '#EEF2FF',
+  },
+  uploadingText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.s,
+    color: Theme.colors.primary,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH,
+  },
+  membersOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  membersSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 30,
+  },
+  membersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.border,
+  },
+  membersTitle: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.l,
+    fontWeight: Theme.typography.weights.bold,
+    color: Theme.colors.text,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  memberAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  memberAvatarText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 14,
+    fontWeight: Theme.typography.weights.bold,
+    color: '#fff',
+  },
+  memberInfo: { flex: 1 },
+  memberName: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.m,
+    fontWeight: Theme.typography.weights.bold,
+    color: Theme.colors.text,
+  },
+  memberRole: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.xs,
+    color: Theme.colors.textSecondary,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  memberSep: {
+    height: 1,
+    backgroundColor: Theme.colors.border,
+    marginLeft: 74,
+  },
+  membersEmpty: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.m,
+    color: Theme.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 30,
+  },
 });

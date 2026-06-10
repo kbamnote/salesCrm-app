@@ -80,7 +80,7 @@ export default function OfferLetterScreen({ navigation }) {
         <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Ionicons name="menu" size={26} color={Theme.colors.text} />
         </TouchableOpacity>
-        <Text style={styles.screenTitle}>Offer Letter</Text>
+        <Text style={styles.screenTitle}>Appointment Letter</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.l, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">

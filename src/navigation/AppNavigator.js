@@ -30,9 +30,14 @@ import NewChatScreen from '../screens/main/NewChatScreen';
 // API key. Employee tracking + the admin Live Map work without it.
 import CloseDealScreen from '../screens/main/CloseDealScreen';
 import DesignsScreen from '../screens/main/DesignsScreen';
+import HRDashboardScreen from '../screens/main/HRDashboardScreen';
+import TelecallerDashboardScreen from '../screens/main/TelecallerDashboardScreen';
+import WhatsAppScreen from '../screens/main/WhatsAppScreen';
+import CallsScreen from '../screens/main/CallsScreen';
 import TeamMonitorScreen from '../screens/main/TeamMonitorScreen';
 import TeamMapScreen from '../screens/main/TeamMapScreen';
 import SetTargetScreen from '../screens/main/SetTargetScreen';
+import TeamProgressScreen from '../screens/main/TeamProgressScreen';
 import OnboardingScreen from '../screens/main/OnboardingScreen';
 import OfferLetterScreen from '../screens/main/OfferLetterScreen';
 import AgreementScreen from '../screens/main/AgreementScreen';
@@ -61,6 +66,10 @@ const headerStyle = {
 // Components available as bottom tabs / drawer items (keyed by screen name).
 const TAB_COMPONENTS = {
   Dashboard: DashboardScreen,
+  HRDashboard: HRDashboardScreen,
+  TelecallerDashboard: TelecallerDashboardScreen,
+  WhatsApp: WhatsAppScreen,
+  Calls: CallsScreen,
   Leads: LeadsScreen,
   Clients: ClientsScreen,
   Profile: ProfileScreen,
@@ -71,6 +80,7 @@ const TAB_COMPONENTS = {
 };
 const DRAWER_COMPONENTS = {
   TeamMonitor: TeamMonitorScreen,
+  TeamProgress: TeamProgressScreen,
   Targets: SetTargetScreen,
   OfferLetter: OfferLetterScreen,
   Agreement: AgreementScreen,
@@ -155,14 +165,35 @@ function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
 
 /** Inner tabs (no visible tab bar — handled by GlobalTabBar). Role-driven. */
 const InnerStack = createNativeStackNavigator();
-function HomeStack() {
+
+const SCREENS_WITH_OWN_HEADER = ['Dashboard', 'Leads', 'Clients', 'Profile', 'Onboarding'];
+
+function HomeStack({ navigation: drawerNav }) {
   const { user } = useAuth();
   const cfg = getRoleConfig(user?.role);
+
+  const tabHeaderOptions = (name) => {
+    if (SCREENS_WITH_OWN_HEADER.includes(name)) {
+      return { headerShown: false };
+    }
+    const def = TAB_DEFS[name];
+    return {
+      headerShown: true,
+      title: def?.label || name,
+      ...headerStyle,
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => drawerNav.openDrawer()} style={{ marginRight: 12 }}>
+          <Ionicons name="menu" size={26} color={Theme.colors.white} />
+        </TouchableOpacity>
+      ),
+    };
+  };
+
   return (
     <InnerStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={cfg.landing}>
       {cfg.tabs.map((name) => {
         const Comp = TAB_COMPONENTS[name];
-        return Comp ? <InnerStack.Screen key={name} name={name} component={Comp} /> : null;
+        return Comp ? <InnerStack.Screen key={name} name={name} component={Comp} options={tabHeaderOptions(name)} /> : null;
       })}
     </InnerStack.Navigator>
   );

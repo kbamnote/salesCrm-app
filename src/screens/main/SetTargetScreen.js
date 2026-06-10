@@ -9,7 +9,6 @@ import { Theme } from '../../theme/Theme';
 
 const curMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
-// What a target means per role (mirrors the admin panel).
 const targetMeta = (role) => {
   if (role === 'tme') return { unit: 'appointments', label: 'Appointment Target' };
   if (role === 'telecaller') return { unit: 'appointments', label: 'Appointments / month (with clients)' };
@@ -70,7 +69,7 @@ export default function SetTargetScreen() {
     setSaving(true);
     try {
       await targetsApi.set({ userId: selectedUser._id, month, target: val });
-      Alert.alert('✅ Target set', `${val} ${meta.unit} target set for ${selectedUser.name} (${monthLabel()}).`);
+      Alert.alert('Target set', `${val} ${meta.unit} target set for ${selectedUser.name} (${monthLabel()}).`);
       setTarget('');
       loadExisting(month);
     } catch (e) {
