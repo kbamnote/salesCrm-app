@@ -42,6 +42,10 @@ import OnboardingScreen from '../screens/main/OnboardingScreen';
 import OfferLetterScreen from '../screens/main/OfferLetterScreen';
 import AgreementScreen from '../screens/main/AgreementScreen';
 import PresentationHistoryScreen from '../screens/main/PresentationHistoryScreen';
+import PayrollScreen from '../screens/main/PayrollScreen';
+import MyPayslipsScreen from '../screens/main/MyPayslipsScreen';
+import PayrollEmployeeScreen from '../screens/main/PayrollEmployeeScreen';
+import PayslipDetailScreen from '../screens/main/PayslipDetailScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -89,12 +93,15 @@ const DRAWER_COMPONENTS = {
   Designs: DesignsScreen,
   ChatList: ChatListScreen,
   PresentationHistory: PresentationHistoryScreen,
+  Payroll: PayrollScreen,
+  MyPayslips: MyPayslipsScreen,
 };
 
 // Screens where we do NOT want to show the tab bar (detail/form screens)
 const HIDDEN_TAB_SCREENS = [
   'Login', 'AddLead', 'LeadDetail', 'AddClient', 'ClientDetail',
   'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
+  'PayrollEmployee', 'PayslipDetail',
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
@@ -302,6 +309,8 @@ export default function AppNavigator() {
               <Stack.Screen name="NewChat"               component={NewChatScreen}               options={{ headerShown: true, title: 'New Chat', ...headerStyle }} />
               <Stack.Screen name="CloseDeal"             component={CloseDealScreen}             options={{ headerShown: true, title: 'Close a Deal', ...headerStyle }} />
               <Stack.Screen name="TeamMap"               component={TeamMapScreen}               options={{ headerShown: true, title: 'Team Map', ...headerStyle }} />
+              <Stack.Screen name="PayrollEmployee"       component={PayrollEmployeeScreen}       options={({ route }) => ({ headerShown: true, title: route.params?.employee?.name || 'Payroll', ...headerStyle })} />
+              <Stack.Screen name="PayslipDetail"         component={PayslipDetailScreen}         options={{ headerShown: true, title: 'Payslip', ...headerStyle }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />

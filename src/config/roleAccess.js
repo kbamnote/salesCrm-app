@@ -34,6 +34,8 @@ export const DRAWER_DEFS = {
   Designs:             { title: 'Designs',         icon: 'images-outline' },
   ChatList:            { title: 'Team Chat',       icon: 'chatbubbles-outline' },
   PresentationHistory: { title: 'Presentations',   icon: 'mic-outline' },
+  Payroll:             { title: 'Payroll',         icon: 'cash-outline' },
+  MyPayslips:          { title: 'My Payslips',     icon: 'receipt-outline' },
 };
 
 // ───── Role presets ─────
@@ -41,7 +43,7 @@ export const DRAWER_DEFS = {
 // Field reps — the original/unchanged experience.
 const fieldRep = {
   tabs: ['Dashboard', 'Leads', 'Clients', 'Profile'],
-  drawer: ['Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory'],
+  drawer: ['Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
@@ -49,7 +51,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['TeamMonitor', 'TeamProgress', 'Targets', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory'],
+  drawer: ['TeamMonitor', 'TeamProgress', 'Targets', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -63,7 +65,7 @@ export const ROLE_CONFIG = {
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
     tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
-    drawer: ['Attendance', 'Designs', 'ChatList'],
+    drawer: ['Attendance', 'Designs', 'ChatList', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
@@ -71,7 +73,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs'],
+    drawer: ['Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true },
   },
@@ -85,7 +87,7 @@ export const ROLE_CONFIG = {
   // Designer — mainly uses the web panel; minimal app.
   designer: {
     tabs: ['Designs', 'Profile'],
-    drawer: ['ChatList'],
+    drawer: ['ChatList', 'MyPayslips'],
     landing: 'Designs',
     can: {},
   },

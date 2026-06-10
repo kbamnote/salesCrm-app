@@ -124,6 +124,20 @@ export const telecallerDashApi = {
   stats: () => api.get('/telecaller-dashboard/stats'),
 };
 
+export const payrollApi = {
+  // HR: list employees + whether their salary structure is set.
+  employees: () => api.get('/payroll/employees'),
+  // Salary structure (fill once). GET works for HR or the owning employee.
+  getStructure: (userId) => api.get(`/payroll/structure/${userId}`),
+  saveStructure: (userId, data) => api.put(`/payroll/structure/${userId}`, data),
+  // Payslips. list() → HR all (optional userId); employee → own.
+  listPayslips: (userId) => api.get('/payroll/payslips', { params: userId ? { userId } : {} }),
+  getPayslip: (id) => api.get(`/payroll/payslips/${id}`),
+  createPayslip: (data) => api.post('/payroll/payslips', data),
+  payslipPdf: (id) => api.get(`/payroll/payslips/${id}/pdf`), // { filename, base64 }
+  deletePayslip: (id) => api.delete(`/payroll/payslips/${id}`),
+};
+
 export const profileApi = {
   me: () => api.get('/profile/me'),
   update: (data) => api.put('/profile/me', data), // { user: {...}, profile: {...} }
