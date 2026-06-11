@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Dimensions, Modal, FlatList } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { targetsApi, leadsApi, clientsApi, dealsApi } from '../../api';
+import { targetsApi, leadsApi, clientsApi, dealsApi, attendanceApi } from '../../api';
 import { can } from '../../config/roleAccess';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,10 @@ export default function DashboardScreen() {
   const [targetData, setTargetData] = useState(null);
   const [stats, setStats] = useState({ leads: 0, clients: 0 });
   const [monthly, setMonthly] = useState([]);
+  const [teamTargets, setTeamTargets] = useState(null); // admin: dept target totals
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [roster, setRoster] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('Overview');
@@ -44,6 +48,16 @@ export default function DashboardScreen() {
       setStats({ leads: leadsData.length, clients: clientsData.length });
     }
 
+    // Admin-only: department-wide target totals.
+    if (user?.role === 'admin') {
+      try {
+        const res = await targetsApi.summary(currentMonth);
+        setTeamTargets(res.data);
+      } catch (_) {
+        setTeamTargets(null);
+      }
+    }
+
     setLoading(false);
     setRefreshing(false);
   };
@@ -57,6 +71,19 @@ export default function DashboardScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
+  };
+
+  const openRoster = async () => {
+    setRosterOpen(true);
+    setRosterLoading(true);
+    try {
+      const res = await attendanceApi.roster();
+      setRoster(res.data);
+    } catch (_) {
+      setRoster(null);
+    } finally {
+      setRosterLoading(false);
+    }
   };
 
   if (loading && !refreshing) {
@@ -82,6 +109,17 @@ export default function DashboardScreen() {
   const fmtShort = (n) =>
     n >= 100000 ? `${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
   const barH = (v) => Math.max((v / maxVal) * (CHART_HEIGHT - 18), v > 0 ? 4 : 0);
+
+  // Attendance (admin) — present vs absent today, for the graph card.
+  const wf = teamTargets?.workforce;
+  const presentToday = wf?.presentToday || 0;
+  const totalActive = wf?.totalActive || 0;
+  const absentToday = Math.max(totalActive - presentToday, 0);
+  const presentPct = totalActive ? Math.round((presentToday / totalActive) * 100) : 0;
+  const joinings = wf?.joiningsThisMonth || 0;
+  const ATT_BAR_H = 100;
+  const attMax = Math.max(presentToday, absentToday, 1);
+  const attBarH = (v) => Math.max((v / attMax) * ATT_BAR_H, v > 0 ? 6 : 2);
 
   return (
     <View style={styles.container}>
@@ -144,34 +182,132 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Target Progress Card */}
-        <View style={styles.analyticsCard}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>{monthLabel} Target</Text>
-            <Text style={styles.percentBadge}>{percentage}%</Text>
-          </View>
+        {/* Target Progress Card — hidden for admin (they see Team Targets instead) */}
+        {user?.role !== 'admin' && (
+          <View style={styles.analyticsCard}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardTitle}>{monthLabel} Target</Text>
+              <Text style={styles.percentBadge}>{percentage}%</Text>
+            </View>
 
-          {target > 0 ? (
-            <>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${progressWidth}%` }]} />
-              </View>
-              <View style={styles.targetRow}>
-                <Text style={styles.targetMuted}>Achieved: ₹{achieved.toLocaleString('en-IN')}</Text>
-                <Text style={styles.targetMuted}>Target: ₹{target.toLocaleString('en-IN')}</Text>
-              </View>
-              <Text style={styles.remainingText}>
-                {remaining > 0
-                  ? `₹${remaining.toLocaleString('en-IN')} to go`
-                  : '🎉 Target achieved!'}
+            {target > 0 ? (
+              <>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${progressWidth}%` }]} />
+                </View>
+                <View style={styles.targetRow}>
+                  <Text style={styles.targetMuted}>Achieved: ₹{achieved.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.targetMuted}>Target: ₹{target.toLocaleString('en-IN')}</Text>
+                </View>
+                <Text style={styles.remainingText}>
+                  {remaining > 0
+                    ? `₹${remaining.toLocaleString('en-IN')} to go`
+                    : '🎉 Target achieved!'}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.noTargetText}>
+                No target set for this month yet. Your manager can assign one.
               </Text>
-            </>
-          ) : (
-            <Text style={styles.noTargetText}>
-              No target set for this month yet. Your manager can assign one.
-            </Text>
-          )}
-        </View>
+            )}
+          </View>
+        )}
+
+        {/* Admin: Attendance Today — its own card, with a mini graph */}
+        {user?.role === 'admin' && teamTargets && (
+          <TouchableOpacity style={styles.presentCard} activeOpacity={0.85} onPress={openRoster}>
+            <View style={styles.presentHeader}>
+              <Text style={styles.cardTitle}>Attendance Today</Text>
+              <View style={styles.seeWhoRow}>
+                <Ionicons name="people-outline" size={12} color={Theme.colors.primary} />
+                <Text style={styles.seeWhoText}>Tap to see who</Text>
+              </View>
+            </View>
+
+            <View style={styles.presentBody}>
+              {/* Left: headline numbers */}
+              <View style={styles.presentNumCol}>
+                <Text style={styles.presentBig}>
+                  {presentToday}<Text style={styles.presentTotal}> / {totalActive}</Text>
+                </Text>
+                <Text style={styles.presentSub}>present today · {presentPct}%</Text>
+                <View style={styles.joinChip}>
+                  <Ionicons name="person-add" size={12} color={Theme.colors.success} />
+                  <Text style={styles.joinChipText}>{joinings} joined this month</Text>
+                </View>
+              </View>
+
+              {/* Right: present vs absent bars */}
+              <View style={styles.attChart}>
+                <View style={styles.attBarCol}>
+                  <Text style={styles.attBarNum}>{presentToday}</Text>
+                  <View style={styles.attBarTrack}>
+                    <View style={[styles.attBarFill, { height: attBarH(presentToday), backgroundColor: Theme.colors.success }]} />
+                  </View>
+                  <Text style={styles.attBarLabel}>Present</Text>
+                </View>
+                <View style={styles.attBarCol}>
+                  <Text style={styles.attBarNum}>{absentToday}</Text>
+                  <View style={styles.attBarTrack}>
+                    <View style={[styles.attBarFill, { height: attBarH(absentToday), backgroundColor: Theme.colors.error }]} />
+                  </View>
+                  <Text style={styles.attBarLabel}>Absent</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Stacked proportion bar */}
+            <View style={styles.stackTrack}>
+              <View style={{ flex: presentToday, backgroundColor: Theme.colors.success }} />
+              <View style={{ flex: absentToday, backgroundColor: Theme.colors.error }} />
+              {totalActive === 0 && <View style={{ flex: 1, backgroundColor: Theme.colors.border }} />}
+            </View>
+            <View style={styles.stackLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Theme.colors.success }]} />
+                <Text style={styles.legendText}>Present ({presentToday})</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Theme.colors.error }]} />
+                <Text style={styles.legendText}>Absent ({absentToday})</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Admin: department target totals */}
+        {user?.role === 'admin' && teamTargets && (
+          <View style={styles.teamCard}>
+            <Text style={styles.cardTitle}>Team Targets · {monthLabel}</Text>
+            <Text style={styles.chartSub}>Total assigned target by department</Text>
+
+            {(teamTargets.groups || []).map((g) => {
+              const color = g.key === 'sales' ? Theme.colors.primary : g.key === 'telecaller' ? '#F59E0B' : '#8B5CF6';
+              const fmtVal = (v) => g.unit === 'currency'
+                ? `₹${(v || 0).toLocaleString('en-IN')}`
+                : `${(v || 0).toLocaleString('en-IN')}${g.unitLabel ? ' ' + g.unitLabel : ''}`;
+              return (
+                <View key={g.key} style={styles.groupBlock}>
+                  <View style={styles.groupHeader}>
+                    <View style={styles.groupLeft}>
+                      <View style={[styles.groupDot, { backgroundColor: color }]} />
+                      <Text style={styles.groupLabel}>{g.label}</Text>
+                      <Text style={styles.groupMembers}>({g.members})</Text>
+                    </View>
+                    <Text style={[styles.groupPct, { color }]}>{g.percentage}%</Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${Math.min(g.percentage, 100)}%`, backgroundColor: color }]} />
+                  </View>
+                  <View style={styles.groupFigures}>
+                    <Text style={styles.targetMuted}>Achieved: {fmtVal(g.totalAchieved)}</Text>
+                    <Text style={styles.targetMuted}>Target: {g.totalTarget ? fmtVal(g.totalTarget) : 'Not set'}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Real Stat Tiles */}
         <View style={styles.statsGrid}>
@@ -245,6 +381,71 @@ export default function DashboardScreen() {
         </View>
 
       </ScrollView>
+
+      {/* Present / Absent roster */}
+      <Modal visible={rosterOpen} animationType="slide" transparent onRequestClose={() => setRosterOpen(false)}>
+        <View style={styles.rosterOverlay}>
+          <View style={styles.rosterSheet}>
+            <View style={styles.rosterHeader}>
+              <Text style={styles.rosterTitle}>Attendance Today</Text>
+              <TouchableOpacity onPress={() => setRosterOpen(false)}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {rosterLoading ? (
+              <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 30 }} />
+            ) : !roster ? (
+              <Text style={styles.rosterEmpty}>Could not load attendance.</Text>
+            ) : (
+              <>
+                <View style={styles.rosterSummary}>
+                  <View style={styles.rosterStat}>
+                    <Text style={[styles.rosterStatNum, { color: Theme.colors.success }]}>{roster.present}</Text>
+                    <Text style={styles.rosterStatLabel}>Present</Text>
+                  </View>
+                  <View style={styles.rosterStat}>
+                    <Text style={[styles.rosterStatNum, { color: Theme.colors.error }]}>{roster.absent}</Text>
+                    <Text style={styles.rosterStatLabel}>Absent</Text>
+                  </View>
+                  <View style={styles.rosterStat}>
+                    <Text style={styles.rosterStatNum}>{roster.total}</Text>
+                    <Text style={styles.rosterStatLabel}>Total</Text>
+                  </View>
+                </View>
+
+                <FlatList
+                  data={roster.roster}
+                  keyExtractor={(item) => String(item._id)}
+                  ItemSeparatorComponent={() => <View style={styles.rosterSep} />}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  renderItem={({ item }) => {
+                    const present = ['present', 'wfh', 'half_day'].includes(item.status);
+                    return (
+                      <View style={styles.rosterRow}>
+                        <View style={[styles.rosterAvatar, { backgroundColor: present ? '#DCFCE7' : '#FEE2E2' }]}>
+                          <Text style={[styles.rosterAvatarText, { color: present ? '#16A34A' : '#DC2626' }]}>
+                            {(item.name || 'U').substring(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rosterName}>{item.name}</Text>
+                          <Text style={styles.rosterRole}>{item.role}</Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: present ? '#DCFCE7' : '#FEE2E2' }]}>
+                          <Text style={[styles.statusPillText, { color: present ? '#16A34A' : '#DC2626' }]}>
+                            {item.status.replace('_', ' ')}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }}
+                />
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -370,6 +571,87 @@ const styles = StyleSheet.create({
   targetMuted: { fontSize: 12, color: Theme.colors.textSecondary },
   remainingText: { marginTop: 8, fontSize: 13, fontWeight: '600', color: Theme.colors.text },
   noTargetText: { fontSize: 13, color: Theme.colors.textSecondary, lineHeight: 18 },
+  teamCard: {
+    backgroundColor: Theme.colors.white,
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  grandRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  grandLabel: { fontSize: 12, color: Theme.colors.textSecondary, marginBottom: 4 },
+  grandVal: { fontSize: 18, fontWeight: 'bold', color: Theme.colors.text },
+  grandSub: { fontSize: 13, fontWeight: '600', color: Theme.colors.textSecondary },
+  seeWhoRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  seeWhoText: { fontSize: 11, color: Theme.colors.primary, fontWeight: '600' },
+
+  // Attendance Today card (graph)
+  presentCard: {
+    backgroundColor: Theme.colors.white,
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  presentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  presentBody: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  presentNumCol: { flex: 1, justifyContent: 'center' },
+  presentBig: { fontSize: 36, fontWeight: 'bold', color: Theme.colors.success },
+  presentTotal: { fontSize: 18, fontWeight: '600', color: Theme.colors.textSecondary },
+  presentSub: { fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2 },
+  joinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  joinChipText: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
+  attChart: { flexDirection: 'row', alignItems: 'flex-end', gap: 18, height: 140, paddingLeft: 10 },
+  attBarCol: { alignItems: 'center', justifyContent: 'flex-end' },
+  attBarNum: { fontSize: 12, fontWeight: '700', color: Theme.colors.text, marginBottom: 4 },
+  attBarTrack: { width: 30, height: 100, justifyContent: 'flex-end' },
+  attBarFill: { width: 30, borderTopLeftRadius: 6, borderTopRightRadius: 6 },
+  attBarLabel: { fontSize: 10, color: Theme.colors.textSecondary, marginTop: 6, fontWeight: '600' },
+  stackTrack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', marginTop: 18, backgroundColor: '#EEF2F7' },
+  stackLegend: { flexDirection: 'row', gap: 16, marginTop: 10 },
+  rosterOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  rosterSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', paddingBottom: 20 },
+  rosterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+  rosterTitle: { fontSize: 18, fontWeight: 'bold', color: Theme.colors.text },
+  rosterEmpty: { textAlign: 'center', color: Theme.colors.textSecondary, marginTop: 30, fontSize: 14 },
+  rosterSummary: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+  rosterStat: { alignItems: 'center' },
+  rosterStatNum: { fontSize: 22, fontWeight: 'bold', color: Theme.colors.text },
+  rosterStatLabel: { fontSize: 11, color: Theme.colors.textSecondary, marginTop: 2, fontWeight: '600' },
+  rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  rosterAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  rosterAvatarText: { fontSize: 13, fontWeight: '700' },
+  rosterName: { fontSize: 14, fontWeight: '600', color: Theme.colors.text },
+  rosterRole: { fontSize: 11, color: Theme.colors.textSecondary, marginTop: 2, textTransform: 'capitalize' },
+  rosterSep: { height: 1, backgroundColor: Theme.colors.border, marginLeft: 72 },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  statusPillText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  groupBlock: { marginTop: 14 },
+  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  groupLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  groupDot: { width: 10, height: 10, borderRadius: 5 },
+  groupLabel: { fontSize: 13, fontWeight: '600', color: Theme.colors.text },
+  groupMembers: { fontSize: 11, color: Theme.colors.textSecondary },
+  groupPct: { fontSize: 13, fontWeight: 'bold' },
+  groupFigures: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

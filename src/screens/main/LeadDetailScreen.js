@@ -55,6 +55,16 @@ export default function LeadDetailScreen({ route, navigation }) {
     Linking.openURL(`mailto:${lead.email}`);
   };
 
+  const handleDirections = () => {
+    if (!lead?.address) return;
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.address)}`);
+  };
+
+  const CALL_RESULT_LABEL = {
+    not_called: 'Not Called', no_answer: "Didn't Pick Up",
+    interested: 'Interested', not_interested: 'Not Interested',
+  };
+
   const handleEdit = () => {
     navigation.navigate('AddLead', { lead });
   };
@@ -155,6 +165,34 @@ export default function LeadDetailScreen({ route, navigation }) {
         <InfoRow icon="business-outline" label="Company" value={lead.company || 'Not provided'} />
         <InfoRow icon="megaphone-outline" label="Source" value={lead.source || 'Not provided'} />
       </View>
+
+      {/* Location / Address (from telecaller) */}
+      {lead.address ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Location / Address</Text>
+          <View style={styles.infoRow}>
+            <View style={styles.infoIconBox}>
+              <Ionicons name="location-outline" size={18} color={Theme.colors.primary} />
+            </View>
+            <Text style={[styles.infoValue, { flex: 1 }]}>{lead.address}</Text>
+          </View>
+          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
+            <Ionicons name="navigate" size={18} color="#fff" />
+            <Text style={styles.directionsText}>Get Directions</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {/* Telecaller feedback */}
+      {(lead.feedback || (lead.callResult && lead.callResult !== 'not_called')) ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Telecaller Feedback</Text>
+          {lead.callResult && lead.callResult !== 'not_called' ? (
+            <InfoRow icon="call-outline" label="Call Result" value={CALL_RESULT_LABEL[lead.callResult] || lead.callResult} />
+          ) : null}
+          {lead.feedback ? <Text style={styles.notesText}>{lead.feedback}</Text> : null}
+        </View>
+      ) : null}
 
       {/* Update Status */}
       <View style={styles.section}>
@@ -363,6 +401,22 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.sizes.m,
     color: Theme.colors.textSecondary,
     lineHeight: 24,
+  },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: Theme.borderRadius.m,
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  directionsText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.s,
+    fontWeight: Theme.typography.weights.bold,
+    color: '#fff',
   },
   deleteBtn: {
     flexDirection: 'row',

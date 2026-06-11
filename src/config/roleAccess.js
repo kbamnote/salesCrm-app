@@ -36,6 +36,13 @@ export const DRAWER_DEFS = {
   PresentationHistory: { title: 'Presentations',   icon: 'mic-outline' },
   Payroll:             { title: 'Payroll',         icon: 'cash-outline' },
   MyPayslips:          { title: 'My Payslips',     icon: 'receipt-outline' },
+  // Tab-capable screens also exposed as drawer items (used by admin's full access).
+  HRDashboard:         { title: 'HR Dashboard',    icon: 'grid-outline' },
+  TeamMap:             { title: 'Team Map',        icon: 'map-outline' },
+  Onboarding:          { title: 'Onboarding',      icon: 'person-add-outline' },
+  Calls:               { title: 'Calls',           icon: 'call-outline' },
+  TelecallerDashboard: { title: 'Telecaller Dashboard', icon: 'headset-outline' },
+  WhatsApp:            { title: 'WhatsApp',         icon: 'logo-whatsapp' },
 };
 
 // ───── Role presets ─────
@@ -78,11 +85,26 @@ export const ROLE_CONFIG = {
     can: { monitor: true },
   },
 
-  // Managers / leads / admin — oversight.
+  // Managers / leads — oversight.
   manager: oversight,
   bdo: oversight,
   team_leader: oversight,
-  admin: oversight,
+
+  // Admin — full access to every screen & capability in the app.
+  admin: {
+    tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
+    drawer: [
+      'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
+      'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
+      'Attendance', 'FieldVisits', 'PresentationHistory', 'ChatList',
+      'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
+    ],
+    landing: 'Dashboard',
+    can: {
+      closeDeal: true, addLead: true, addClient: true, fieldVisit: true,
+      presentations: true, monitor: true,
+    },
+  },
 
   // Designer — mainly uses the web panel; minimal app.
   designer: {

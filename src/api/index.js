@@ -33,12 +33,16 @@ export const leadsApi = {
   create: (data) => api.post('/leads', data),
   getById: (id) => api.get(`/leads/${id}`),
   update: (id, data) => api.put(`/leads/${id}`, data),
+  // Assign to a salesperson/TMS (+ optional status); notifies the assignee.
+  assign: (id, data) => api.post(`/leads/${id}/assign`, data),
 };
 
 export const targetsApi = {
   myTarget: (month) => api.get('/targets/my', { params: { month } }),
   list: (params) => api.get('/targets', { params }),
   team: (month) => api.get('/targets/team', { params: { month } }),
+  // Department target totals (sales team / telecallers / HR) — admin dashboard.
+  summary: (month) => api.get('/targets/summary', { params: { month } }),
   set: (data) => api.post('/targets', data), // { userId, month, target } — HR/manager/admin
 };
 
@@ -49,6 +53,8 @@ export const attendanceApi = {
   punchOut: (data) => api.post('/attendance/punch-out', data),
   // Oversight: all team attendance for a given date (admin/manager/hr only).
   byDate: (date) => api.get('/attendance', { params: { date } }),
+  // Full roster with present/absent status for a day (absentees included).
+  roster: (date) => api.get('/attendance/roster', { params: date ? { date } : {} }),
 };
 
 export const fieldVisitsApi = {
@@ -100,6 +106,8 @@ export const chatApi = {
   groups: () => api.get('/chat/groups'),
   groupDetail: (id) => api.get(`/chat/groups/${id}`),
   createGroup: (data) => api.post('/chat/groups', data),
+  // Mark all messages in a chat (from others) as read by the current user.
+  markRead: (chatId) => api.post(`/chat/${chatId}/read`),
 };
 
 export const usersApi = {
@@ -118,6 +126,8 @@ export const callsApi = {
   list: () => api.get('/calls'),
   create: (data) => api.post('/calls', data),
   update: (id, data) => api.put(`/calls/${id}`, data),
+  // Upsert one call-log entry per lead (who was called + status + assignee).
+  logLead: (data) => api.post('/calls/log-lead', data),
 };
 
 export const telecallerDashApi = {

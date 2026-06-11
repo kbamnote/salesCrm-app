@@ -101,13 +101,30 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (!chatId) { setLoading(false); return; }
     try {
       const res = await chatApi.messages(chatId);
-      setMessages(res.data || []);
+      const msgs = res.data || [];
+      setMessages(msgs);
+      // If any incoming message hasn't been read by me yet, mark the chat read
+      // so the unread badge clears and the sender sees a "seen" receipt.
+      const hasUnread = msgs.some((m) => {
+        const senderId = String(m.fromId || '');
+        if (!senderId || senderId === myId) return false;
+        return !(m.readBy || []).map(String).includes(myId);
+      });
+      if (hasUnread) chatApi.markRead(chatId).catch(() => {});
     } catch (e) {
       console.log('Error loading messages', e);
     } finally {
       setLoading(false);
     }
-  }, [chatId]);
+  }, [chatId, myId]);
+
+  // True when at least one other participant has read my message.
+  const isSeenByOthers = useCallback((msg) => {
+    const readBy = (msg.readBy || []).map(String).filter((id) => id !== myId);
+    if (isGroup) return readBy.length > 0;
+    if (toId) return readBy.includes(String(toId));
+    return msg.read === true;
+  }, [isGroup, toId, myId]);
 
   useEffect(() => {
     loadMessages();
@@ -359,9 +376,19 @@ export default function ChatRoomScreen({ route, navigation }) {
           (item.type === 'image') && styles.imageBubble,
         ]}>
           {renderMessageContent(item, isMine)}
-          <Text style={[styles.bubbleTime, isMine && styles.bubbleTimeMine]}>
-            {formatTime(item.createdAt)}
-          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.bubbleTime, isMine && styles.bubbleTimeMine]}>
+              {formatTime(item.createdAt)}
+            </Text>
+            {isMine && (
+              <Ionicons
+                name={isSeenByOthers(item) ? 'checkmark-done' : 'checkmark'}
+                size={14}
+                color={isSeenByOthers(item) ? '#8FE3FF' : 'rgba(255,255,255,0.7)'}
+                style={{ marginLeft: 3 }}
+              />
+            )}
+          </View>
         </View>
       </View>
     );
@@ -582,12 +609,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   bubbleTextMine: { color: '#fff' },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
   bubbleTime: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: 10,
     color: Theme.colors.textSecondary,
     textAlign: 'right',
-    marginTop: 4,
   },
   bubbleTimeMine: { color: 'rgba(255,255,255,0.7)' },
   imageMsg: {

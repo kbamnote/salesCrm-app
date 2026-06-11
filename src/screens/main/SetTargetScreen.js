@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usersApi, targetsApi } from '../../api';
+import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
 const curMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -13,11 +14,12 @@ const targetMeta = (role) => {
   if (role === 'tme') return { unit: 'appointments', label: 'Appointment Target' };
   if (role === 'telecaller') return { unit: 'appointments', label: 'Appointments / month (with clients)' };
   if (role === 'tms') return { unit: 'calls', label: 'Call Target' };
-  if (role === 'hr') return { unit: 'hirings', label: 'Hiring Target' };
+  if (role === 'hr') return { unit: 'joinings', label: 'Joining Target (people hired)' };
   return { unit: 'revenue', label: 'Revenue Target' };
 };
 
 export default function SetTargetScreen() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
   const [existing, setExisting] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,12 @@ export default function SetTargetScreen() {
   const [saving, setSaving] = useState(false);
 
   const meta = targetMeta(selectedUser?.role);
+  const myId = String(me?._id || me?.id || '');
+  // Admins can't be assigned a target by others — only the admin themselves.
+  // Hide admin accounts from the picker, except the logged-in admin (self).
+  const assignableUsers = users.filter(
+    (u) => u.role !== 'admin' || String(u._id) === myId
+  );
 
   const loadUsers = async () => {
     try {
@@ -158,7 +166,7 @@ export default function SetTargetScreen() {
               </TouchableOpacity>
             </View>
             <FlatList
-              data={users}
+              data={assignableUsers}
               keyExtractor={(item, i) => item._id || String(i)}
               ItemSeparatorComponent={() => <View style={styles.sep} />}
               ListEmptyComponent={<Text style={styles.empty}>No employees found</Text>}

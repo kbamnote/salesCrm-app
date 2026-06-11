@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -95,7 +95,18 @@ const DRAWER_COMPONENTS = {
   PresentationHistory: PresentationHistoryScreen,
   Payroll: PayrollScreen,
   MyPayslips: MyPayslipsScreen,
+  // Tab-capable screens also usable as drawer items (admin full access).
+  HRDashboard: HRDashboardScreen,
+  TeamMap: TeamMapScreen,
+  Onboarding: OnboardingScreen,
+  Calls: CallsScreen,
+  TelecallerDashboard: TelecallerDashboardScreen,
+  WhatsApp: WhatsAppScreen,
 };
+
+// Drawer items whose screen renders its OWN header — suppress the drawer header
+// for these to avoid a double header.
+const DRAWER_SCREENS_OWN_HEADER = ['Onboarding'];
 
 // Screens where we do NOT want to show the tab bar (detail/form screens)
 const HIDDEN_TAB_SCREENS = [
@@ -206,11 +217,22 @@ function HomeStack({ navigation: drawerNav }) {
   );
 }
 
+// Custom drawer content — adds bottom padding so the last item isn't hidden
+// behind the floating GlobalTabBar.
+function DrawerContent(props) {
+  return (
+    <DrawerContentScrollView {...props} contentContainerStyle={{ paddingBottom: 110 }}>
+      <DrawerItemList {...props} />
+    </DrawerContentScrollView>
+  );
+}
+
 function DrawerNavigator() {
   const { user } = useAuth();
   const cfg = getRoleConfig(user?.role);
   return (
     <Drawer.Navigator
+      drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         ...headerStyle,
         drawerActiveTintColor: Theme.colors.primary,
@@ -255,7 +277,11 @@ function DrawerNavigator() {
             key={name}
             name={name}
             component={Comp}
-            options={{ title: def.title, drawerIcon: baseIcon }}
+            options={{
+              title: def.title,
+              drawerIcon: baseIcon,
+              headerShown: !DRAWER_SCREENS_OWN_HEADER.includes(name),
+            }}
           />
         );
       })}
