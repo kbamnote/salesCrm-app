@@ -46,6 +46,8 @@ import PayrollScreen from '../screens/main/PayrollScreen';
 import MyPayslipsScreen from '../screens/main/MyPayslipsScreen';
 import PayrollEmployeeScreen from '../screens/main/PayrollEmployeeScreen';
 import PayslipDetailScreen from '../screens/main/PayslipDetailScreen';
+import SendWelcomeLetterScreen from '../screens/main/SendWelcomeLetterScreen';
+import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -102,6 +104,8 @@ const DRAWER_COMPONENTS = {
   Calls: CallsScreen,
   TelecallerDashboard: TelecallerDashboardScreen,
   WhatsApp: WhatsAppScreen,
+  SendWelcome: SendWelcomeLetterScreen,
+  SendMembership: SendTitaniumCardScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header

@@ -148,6 +148,12 @@ export const payrollApi = {
   deletePayslip: (id) => api.delete(`/payroll/payslips/${id}`),
 };
 
+export const clientDocsApi = {
+  // Generate + email a PDF to the client via Resend (no Word attachment).
+  sendWelcome: (data) => api.post('/tapify-welcome/send', data),
+  sendMembership: (data) => api.post('/membership/send', data),
+};
+
 export const profileApi = {
   me: () => api.get('/profile/me'),
   update: (data) => api.put('/profile/me', data), // { user: {...}, profile: {...} }
