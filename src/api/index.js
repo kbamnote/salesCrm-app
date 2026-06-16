@@ -67,6 +67,13 @@ export const dealsApi = {
   close: (data) => api.post('/deals/close', data),
   stats: (month) => api.get('/deals/stats', { params: { month } }),
   monthly: (months = 6) => api.get('/deals/monthly', { params: { months } }),
+  // Record a payment against a closed deal (mode: cash|pdc|upi|card).
+  addPayment: (id, data) => api.post(`/deals/${id}/payment`, data),
+};
+
+export const tapifyCardApi = {
+  // Create the customer's Tapify card (user + vCard) via the CRM bridge.
+  create: (data) => api.post('/tapify-card/create', data),
 };
 
 export const designsApi = {

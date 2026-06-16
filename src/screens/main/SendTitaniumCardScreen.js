@@ -10,8 +10,9 @@ import { Theme } from '../../theme/Theme';
 const todayStr = () =>
   new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
 
-export default function SendTitaniumCardScreen() {
-  const [form, setForm] = useState({ date: todayStr(), customerName: '', customerEmail: '' });
+export default function SendTitaniumCardScreen({ route }) {
+  const p = route?.params || {};
+  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '' });
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 

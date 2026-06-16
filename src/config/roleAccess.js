@@ -45,6 +45,7 @@ export const DRAWER_DEFS = {
   WhatsApp:            { title: 'WhatsApp',         icon: 'logo-whatsapp' },
   SendWelcome:         { title: 'Welcome Letter',  icon: 'mail-outline' },
   SendMembership:      { title: 'Titanium Card',   icon: 'card-outline' },
+  CloseDeal:           { title: 'Close a Deal',    icon: 'checkmark-done-circle-outline' },
 };
 
 // ───── Role presets ─────
@@ -66,8 +67,7 @@ const oversight = {
 };
 
 export const ROLE_CONFIG = {
-  // Field sales — field rep + can send Welcome Letter / Titanium Card to clients.
-  sales: { ...fieldRep, drawer: [...fieldRep.drawer, 'SendWelcome', 'SendMembership'] },
+  sales: fieldRep,
   tms: fieldRep,
   tme: fieldRep,
 
@@ -82,9 +82,9 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'SendWelcome', 'SendMembership', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['CloseDeal', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
-    can: { monitor: true },
+    can: { monitor: true, closeDeal: true, addClient: true },
   },
 
   // Managers / leads — oversight.
@@ -99,7 +99,6 @@ export const ROLE_CONFIG = {
       'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
       'Attendance', 'FieldVisits', 'PresentationHistory', 'ChatList',
-      'SendWelcome', 'SendMembership',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
     landing: 'Dashboard',

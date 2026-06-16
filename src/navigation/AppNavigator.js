@@ -48,6 +48,7 @@ import PayrollEmployeeScreen from '../screens/main/PayrollEmployeeScreen';
 import PayslipDetailScreen from '../screens/main/PayslipDetailScreen';
 import SendWelcomeLetterScreen from '../screens/main/SendWelcomeLetterScreen';
 import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
+import DealCompletedScreen from '../screens/main/DealCompletedScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -106,6 +107,7 @@ const DRAWER_COMPONENTS = {
   WhatsApp: WhatsAppScreen,
   SendWelcome: SendWelcomeLetterScreen,
   SendMembership: SendTitaniumCardScreen,
+  CloseDeal: CloseDealScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header
@@ -116,7 +118,7 @@ const DRAWER_SCREENS_OWN_HEADER = ['Onboarding'];
 const HIDDEN_TAB_SCREENS = [
   'Login', 'AddLead', 'LeadDetail', 'AddClient', 'ClientDetail',
   'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
-  'PayrollEmployee', 'PayslipDetail',
+  'PayrollEmployee', 'PayslipDetail', 'DealCompleted', 'SendWelcome', 'SendMembership',
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
@@ -338,6 +340,9 @@ export default function AppNavigator() {
               <Stack.Screen name="ChatRoom"              component={ChatRoomScreen}              options={({ route }) => ({ headerShown: true, title: route.params?.chatName || 'Chat', ...headerStyle })} />
               <Stack.Screen name="NewChat"               component={NewChatScreen}               options={{ headerShown: true, title: 'New Chat', ...headerStyle }} />
               <Stack.Screen name="CloseDeal"             component={CloseDealScreen}             options={{ headerShown: true, title: 'Close a Deal', ...headerStyle }} />
+              <Stack.Screen name="DealCompleted"         component={DealCompletedScreen}         options={{ headerShown: true, title: 'Deal Completed', ...headerStyle }} />
+              <Stack.Screen name="SendWelcome"           component={SendWelcomeLetterScreen}     options={{ headerShown: true, title: 'Welcome Letter', ...headerStyle }} />
+              <Stack.Screen name="SendMembership"        component={SendTitaniumCardScreen}      options={{ headerShown: true, title: 'Titanium Card', ...headerStyle }} />
               <Stack.Screen name="TeamMap"               component={TeamMapScreen}               options={{ headerShown: true, title: 'Team Map', ...headerStyle }} />
               <Stack.Screen name="PayrollEmployee"       component={PayrollEmployeeScreen}       options={({ route }) => ({ headerShown: true, title: route.params?.employee?.name || 'Payroll', ...headerStyle })} />
               <Stack.Screen name="PayslipDetail"         component={PayslipDetailScreen}         options={{ headerShown: true, title: 'Payslip', ...headerStyle }} />

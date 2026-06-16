@@ -36,15 +36,19 @@ export default function CloseDealScreen({ navigation }) {
 
     setSubmitting(true);
     try {
-      await dealsApi.close({
+      const res = await dealsApi.close({
         clientId: selectedClient._id,
         clientName: selectedClient.name,
         amount: value,
         notes: notes.trim(),
       });
-      Alert.alert('🎉 Deal Closed!', 'Your deal has been recorded and the team has been notified.', [
-        { text: 'Done', onPress: () => navigation.goBack() },
-      ]);
+      // Go to the post-deal actions screen (create card, send letters, collect payment).
+      // navigate (not replace) so it works whether opened from a stack or the drawer.
+      navigation.navigate('DealCompleted', {
+        meetingId: res.data?._id,
+        client: selectedClient,
+        amount: value,
+      });
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || 'Failed to record the deal. Please try again.');
     } finally {

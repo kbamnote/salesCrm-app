@@ -20,10 +20,17 @@ const FIELDS = [
   { key: 'website', label: 'Website', kb: 'default' },
 ];
 
-export default function SendWelcomeLetterScreen() {
+export default function SendWelcomeLetterScreen({ route }) {
+  const p = route?.params || {};
   const [form, setForm] = useState({
-    date: todayStr(), customerName: '', customerEmail: '',
-    businessName: '', url: '', userId: '', password: '', website: '',
+    date: todayStr(),
+    customerName: p.customerName || '',
+    customerEmail: p.customerEmail || '',
+    businessName: p.businessName || '',
+    url: p.url || '',
+    userId: p.userId || '',
+    password: p.password || '',
+    website: p.website || '',
   });
   const [sending, setSending] = useState(false);
 
