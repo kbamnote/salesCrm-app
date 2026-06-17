@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
       if (token) {
         const r = await authApi.me();
         setUser(extractUser(r.data));
-        registerForPush(); // refresh push token for the restored session
+        registerForPush().then(({ error }) => { if (error) console.log('[Push] restore session register:', error); });
       }
     } catch (e) {
       console.log('Failed to restore token', e);
@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
     const r = await authApi.login({ email, password });
     await AsyncStorage.setItem('token', r.data.token);
     setUser(extractUser(r.data));
-    registerForPush(); // register this device for push on login
+    registerForPush().then(({ error }) => { if (error) console.log('[Push] login register:', error); });
   };
 
   // Call this to force a fresh user fetch (e.g. from ProfileScreen)

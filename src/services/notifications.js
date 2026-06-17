@@ -29,22 +29,24 @@ async function ensureAndroidChannel() {
 
 function getProjectId() {
   return (
-    Constants?.expoConfig?.extra?.eas?.projectId ||
-    Constants?.easConfig?.projectId
+    Constants?.expoConfig?.extra?.eas?.projectId ??
+    Constants?.easConfig?.projectId ??
+    Constants?.manifest2?.extra?.eas?.projectId ??
+    Constants?.manifest?.extra?.eas?.projectId
   );
 }
 
 /**
- * Ask permission, fetch the Expo push token, and register it with the backend
- * for the logged-in user. Safe to call on every login/app-resume — it dedupes
- * server-side. Returns the token (or null if unavailable / denied).
+ * Ask permission, fetch the Expo push token, and register it with the backend.
+ * Returns { token, error } — token is null on failure, error describes why.
  */
 export async function registerForPush() {
   try {
     await ensureAndroidChannel();
 
-    // Push tokens are only issued on physical devices.
-    if (!Device.isDevice) return null;
+    if (!Device.isDevice) {
+      return { token: null, error: 'not-a-device' };
+    }
 
     const { status: existing } = await Notifications.getPermissionsAsync();
     let status = existing;
@@ -52,25 +54,33 @@ export async function registerForPush() {
       const req = await Notifications.requestPermissionsAsync();
       status = req.status;
     }
-    if (status !== 'granted') return null;
+    if (status !== 'granted') {
+      return { token: null, error: 'permission-denied' };
+    }
 
     const projectId = getProjectId();
-    const tokenData = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
-    const token = tokenData.data;
-    if (!token) return null;
+    if (!projectId) {
+      console.log('[Push] No EAS projectId found in Constants');
+      return { token: null, error: 'no-project-id' };
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenData?.data;
+    if (!token) {
+      return { token: null, error: 'empty-token' };
+    }
 
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
     try {
       await notificationsApi.registerToken(token);
     } catch (e) {
-      console.log('registerForPush: backend register failed', e?.message || e);
+      console.log('[Push] backend register failed:', e?.message || e);
     }
-    return token;
+    return { token, error: null };
   } catch (e) {
-    console.log('registerForPush failed', e?.message || e);
-    return null;
+    const msg = e?.message || String(e);
+    console.log('[Push] registerForPush failed:', msg);
+    return { token: null, error: msg };
   }
 }
 

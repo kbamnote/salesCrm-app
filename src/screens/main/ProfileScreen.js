@@ -55,38 +55,40 @@ export default function ProfileScreen() {
 
   const handleTestNotification = async () => {
     try {
-      // Re-register push token first to ensure server has it
-      await registerForPush();
+      const { token, error } = await registerForPush();
+      if (!token) {
+        const reasons = {
+          'not-a-device': 'Push tokens only work on physical devices, not simulators.',
+          'permission-denied': 'Notification permission was denied. Go to Settings → Apps → Tapify Sales CRM → Notifications and enable them.',
+          'no-project-id': 'EAS project ID not found. Please rebuild the app with EAS.',
+          'empty-token': 'Expo returned an empty token. Try reinstalling the app.',
+        };
+        return Alert.alert('Cannot get push token', reasons[error] || `Error: ${error}`);
+      }
       const res = await notificationsApi.testPush();
       Alert.alert(
-        'Push sent!',
-        `A real push notification was sent through the server. You have ${res.data?.tokens || 0} device(s) registered.`
+        'Push sent! ✅',
+        `Notification sent via server. ${res.data?.tokens || 0} device(s) registered.\n\nToken: ${token.slice(0, 40)}...`
       );
     } catch (e) {
       const msg = e.response?.data?.error || e.message;
-      if (msg.includes('No push tokens')) {
-        Alert.alert(
-          'No push token',
-          'Your device has no push token registered on the server. Try logging out and back in. Make sure this is a real build (not Expo Go) and notifications are allowed.'
-        );
-      } else {
-        Alert.alert('Push test failed', msg);
-      }
+      Alert.alert('Push test failed', msg);
     }
   };
 
   const handleShowToken = async () => {
-    let token = await getStoredPushToken();
-    if (!token) {
-      await registerForPush(); // try to (re)register
-      token = await getStoredPushToken();
+    const { token, error } = await registerForPush();
+    if (token) {
+      Alert.alert('Push token ✅', token);
+    } else {
+      const reasons = {
+        'not-a-device': 'Simulator/emulator detected — tokens only work on real devices.',
+        'permission-denied': 'Notifications are blocked. Enable them in device Settings.',
+        'no-project-id': 'EAS project ID missing — rebuild with EAS.',
+        'empty-token': 'Expo returned empty token — try reinstalling.',
+      };
+      Alert.alert('No push token', reasons[error] || `Failed: ${error}`);
     }
-    Alert.alert(
-      'Push token',
-      token
-        ? token
-        : 'No push token yet. Make sure this is a real build (not Expo Go), notifications are allowed, and you are logged in.'
-    );
   };
 
   const handlePickPhoto = async () => {
