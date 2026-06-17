@@ -12,7 +12,7 @@ const todayStr = () =>
 
 export default function SendTitaniumCardScreen({ route }) {
   const p = route?.params || {};
-  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '' });
+  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', senderEmail: '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -25,6 +25,10 @@ export default function SendTitaniumCardScreen({ route }) {
         date: form.date.trim(),
         customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim(),
+        senderEmail: form.senderEmail.trim(),
+        cardNumber: form.cardNumber.trim(),
+        validity: form.validity.trim(),
+        cardHolderName: form.cardHolderName.trim(),
       });
       const msg = res.data?.message || 'Titanium card sent.';
       Alert.alert('Sent ✅', `${msg}\n\nThe PDF was emailed to ${form.customerEmail.trim()}.`);
@@ -53,8 +57,22 @@ export default function SendTitaniumCardScreen({ route }) {
         <Text style={styles.fieldLabel}>Customer Name</Text>
         <TextInput style={styles.input} value={form.customerName} onChangeText={(v) => setF('customerName', v)} placeholder="Customer name" placeholderTextColor={Theme.colors.textSecondary} />
 
-        <Text style={styles.fieldLabel}>Customer Email *</Text>
+        <Text style={styles.fieldLabel}>Customer Email * (where PDF is delivered)</Text>
         <TextInput style={styles.input} value={form.customerEmail} onChangeText={(v) => setF('customerEmail', v)} keyboardType="email-address" autoCapitalize="none" placeholder="client@example.com" placeholderTextColor={Theme.colors.textSecondary} />
+
+        <Text style={styles.fieldLabel}>Send From Email (your company email)</Text>
+        <TextInput style={styles.input} value={form.senderEmail} onChangeText={(v) => setF('senderEmail', v)} keyboardType="email-address" autoCapitalize="none" placeholder="info@mrprintworld.com" placeholderTextColor={Theme.colors.textSecondary} />
+
+        <Text style={styles.sectionLabel}>Card Details</Text>
+
+        <Text style={styles.fieldLabel}>Card Number</Text>
+        <TextInput style={styles.input} value={form.cardNumber} onChangeText={(v) => setF('cardNumber', v)} placeholder="e.g. 290815 2026 200000" placeholderTextColor={Theme.colors.textSecondary} />
+
+        <Text style={styles.fieldLabel}>Valid Thru</Text>
+        <TextInput style={styles.input} value={form.validity} onChangeText={(v) => setF('validity', v)} placeholder="e.g. 01/01/99" placeholderTextColor={Theme.colors.textSecondary} />
+
+        <Text style={styles.fieldLabel}>Cardholder / Business Name (on card)</Text>
+        <TextInput style={styles.input} value={form.cardHolderName} onChangeText={(v) => setF('cardHolderName', v)} placeholder="Business name printed on card" placeholderTextColor={Theme.colors.textSecondary} />
 
         <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.7 }]} onPress={submit} disabled={sending}>
           {sending ? <ActivityIndicator color="#fff" /> : <><Ionicons name="send" size={18} color="#fff" /><Text style={styles.sendBtnText}>Send PDF to Client</Text></>}
@@ -71,6 +89,7 @@ const styles = StyleSheet.create({
   bannerSub: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   fieldLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: 12 },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border, paddingHorizontal: 14, paddingVertical: 12, fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.text },
+  sectionLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: '#0b3d6b', marginTop: 20, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: '#dde3ed', paddingBottom: 6 },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Theme.colors.primary, borderRadius: 12, paddingVertical: 15, marginTop: 22 },
   sendBtnText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '700', color: '#fff' },
 });

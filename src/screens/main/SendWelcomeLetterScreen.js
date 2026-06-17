@@ -12,11 +12,12 @@ const todayStr = () =>
 
 const FIELDS = [
   { key: 'customerName', label: 'Customer Name', kb: 'default' },
-  { key: 'customerEmail', label: 'Customer Email *', kb: 'email-address' },
+  { key: 'customerEmail', label: 'Customer Email * (where PDF is delivered)', kb: 'email-address' },
+  { key: 'senderEmail', label: 'Send From Email (your company email)', kb: 'email-address' },
   { key: 'businessName', label: 'Business Name', kb: 'default' },
   { key: 'url', label: 'URL', kb: 'default' },
-  { key: 'userId', label: 'User ID', kb: 'default' },
-  { key: 'password', label: 'Password', kb: 'default' },
+  { key: 'userId', label: 'Login Email / User ID (printed in PDF)', kb: 'email-address' },
+  { key: 'password', label: 'Password (printed in PDF)', kb: 'default' },
   { key: 'website', label: 'Website', kb: 'default' },
 ];
 
@@ -26,10 +27,11 @@ export default function SendWelcomeLetterScreen({ route }) {
     date: todayStr(),
     customerName: p.customerName || '',
     customerEmail: p.customerEmail || '',
+    senderEmail: '',
     businessName: p.businessName || '',
     url: p.url || '',
-    userId: p.userId || '',
-    password: p.password || '',
+    userId: '',
+    password: '',
     website: p.website || '',
   });
   const [sending, setSending] = useState(false);
@@ -44,6 +46,7 @@ export default function SendWelcomeLetterScreen({ route }) {
       const res = await clientDocsApi.sendWelcome({
         date: form.date.trim(),
         customerEmail: form.customerEmail.trim(),
+        senderEmail: form.senderEmail.trim(),
         customerName: form.customerName.trim(),
         businessName: form.businessName.trim(),
         url: form.url.trim(),

@@ -104,6 +104,8 @@ export const notificationsApi = {
   registerToken: (token) => api.post('/notifications/push-token', { token }),
   removeToken: (token) => api.post('/notifications/push-token/remove', { token }),
   testPush: () => api.post('/notifications/test-push'),
+  // Admin/HR: send broadcast (to:'all') or individual (to: userId)
+  send: (data) => api.post('/notifications', data),
 };
 
 export const chatApi = {

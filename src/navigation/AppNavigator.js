@@ -49,6 +49,7 @@ import PayslipDetailScreen from '../screens/main/PayslipDetailScreen';
 import SendWelcomeLetterScreen from '../screens/main/SendWelcomeLetterScreen';
 import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
 import DealCompletedScreen from '../screens/main/DealCompletedScreen';
+import SendNotificationScreen from '../screens/main/SendNotificationScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -108,6 +109,7 @@ const DRAWER_COMPONENTS = {
   SendWelcome: SendWelcomeLetterScreen,
   SendMembership: SendTitaniumCardScreen,
   CloseDeal: CloseDealScreen,
+  SendNotification: SendNotificationScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header

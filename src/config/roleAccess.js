@@ -46,6 +46,7 @@ export const DRAWER_DEFS = {
   SendWelcome:         { title: 'Welcome Letter',  icon: 'mail-outline' },
   SendMembership:      { title: 'Titanium Card',   icon: 'card-outline' },
   CloseDeal:           { title: 'Close a Deal',    icon: 'checkmark-done-circle-outline' },
+  SendNotification:    { title: 'Notifications',   icon: 'notifications-outline' },
 };
 
 // ───── Role presets ─────
@@ -82,7 +83,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['CloseDeal', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['CloseDeal', 'SendNotification', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -96,7 +97,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
-      'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
+      'SendNotification', 'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
       'Attendance', 'FieldVisits', 'PresentationHistory', 'ChatList',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
