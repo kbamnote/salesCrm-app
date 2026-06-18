@@ -99,7 +99,7 @@ export const ROLE_CONFIG = {
     drawer: [
       'SendNotification', 'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
-      'Attendance', 'FieldVisits', 'PresentationHistory', 'ChatList',
+      'PresentationHistory', 'ChatList',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
     landing: 'Dashboard',

@@ -3,7 +3,7 @@
     "name": "Tapify Sales Crm",
     "slug": "salestapify",
     "scheme": "tapifysalescrm",
-    "version": "1.0.19",
+    "version": "1.0.20",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -41,7 +41,8 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 41
+      "versionCode": 43,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -80,9 +81,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "85f7a609-ebf6-41cf-be22-1783cfc93647"
+        "projectId": "88da1282-e5c4-46e9-aae7-a48f7880cc6b"
       }
     },
-    "owner": "kbamnote"
+    "owner": "imtech1s-organization"
   }
 }

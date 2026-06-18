@@ -75,14 +75,7 @@ export default function OfferLetterScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Ionicons name="menu" size={26} color={Theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Appointment Letter</Text>
-      </View>
-
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.l, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.label}>Employee Name *</Text>
         <TextInput style={styles.input} value={employeeName} onChangeText={setEmployeeName} placeholder="e.g. Ramesh Kumar" placeholderTextColor={Theme.colors.textSecondary} />

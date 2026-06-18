@@ -67,14 +67,7 @@ export default function AgreementScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Ionicons name="menu" size={26} color={Theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Employment Agreement</Text>
-      </View>
-
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.l, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
         <Field label="Employee Name *" value={f.employeeName} onChange={(v) => set('employeeName', v)} placeholder="e.g. Ramesh Kumar" />
 

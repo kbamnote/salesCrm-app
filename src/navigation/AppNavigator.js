@@ -126,7 +126,6 @@ const HIDDEN_TAB_SCREENS = [
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
 function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
   const insets = useSafeAreaInsets();
-  const bottomOffset = Math.max(insets.bottom, 10) + 10;
 
   if (HIDDEN_TAB_SCREENS.includes(currentRoute)) return null;
 
@@ -141,20 +140,20 @@ function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
   return (
     <View style={{
       position: 'absolute',
-      bottom: bottomOffset,
-      left: 20,
-      right: 20,
-      height: 58,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 60 + insets.bottom,
+      paddingBottom: insets.bottom,
       backgroundColor: Theme.colors.primary,
-      borderRadius: 29,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-around',
       elevation: 12,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.2,
-      shadowRadius: 12,
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
       paddingHorizontal: 8,
       zIndex: 999,
     }}>
@@ -280,13 +279,16 @@ function DrawerNavigator() {
           );
         }
 
+        // Admin sees company-wide salary spend here, not personal payslips.
+        const title = (name === 'MyPayslips' && user?.role === 'admin') ? 'Salary Spend' : def.title;
+
         return (
           <Drawer.Screen
             key={name}
             name={name}
             component={Comp}
             options={{
-              title: def.title,
+              title,
               drawerIcon: baseIcon,
               headerShown: !DRAWER_SCREENS_OWN_HEADER.includes(name),
             }}

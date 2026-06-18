@@ -151,6 +151,8 @@ export const payrollApi = {
   saveStructure: (userId, data) => api.put(`/payroll/structure/${userId}`, data),
   // Payslips. list() → HR all (optional userId); employee → own.
   listPayslips: (userId) => api.get('/payroll/payslips', { params: userId ? { userId } : {} }),
+  // Admin/HR: total salary spend grouped by month. Optional { year } or { month }.
+  salarySpend: (params) => api.get('/payroll/salary-spend', { params }),
   getPayslip: (id) => api.get(`/payroll/payslips/${id}`),
   createPayslip: (data) => api.post('/payroll/payslips', data),
   payslipPdf: (id) => api.get(`/payroll/payslips/${id}/pdf`), // { filename, base64 }

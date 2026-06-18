@@ -12,7 +12,7 @@ const todayStr = () =>
 
 export default function SendTitaniumCardScreen({ route }) {
   const p = route?.params || {};
-  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', senderEmail: '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
+  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -25,7 +25,6 @@ export default function SendTitaniumCardScreen({ route }) {
         date: form.date.trim(),
         customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim(),
-        senderEmail: form.senderEmail.trim(),
         cardNumber: form.cardNumber.trim(),
         validity: form.validity.trim(),
         cardHolderName: form.cardHolderName.trim(),
@@ -59,9 +58,6 @@ export default function SendTitaniumCardScreen({ route }) {
 
         <Text style={styles.fieldLabel}>Customer Email * (where PDF is delivered)</Text>
         <TextInput style={styles.input} value={form.customerEmail} onChangeText={(v) => setF('customerEmail', v)} keyboardType="email-address" autoCapitalize="none" placeholder="client@example.com" placeholderTextColor={Theme.colors.textSecondary} />
-
-        <Text style={styles.fieldLabel}>Send From Email (your company email)</Text>
-        <TextInput style={styles.input} value={form.senderEmail} onChangeText={(v) => setF('senderEmail', v)} keyboardType="email-address" autoCapitalize="none" placeholder="info@mrprintworld.com" placeholderTextColor={Theme.colors.textSecondary} />
 
         <Text style={styles.sectionLabel}>Card Details</Text>
 

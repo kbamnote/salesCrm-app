@@ -138,9 +138,13 @@ export default function DashboardScreen() {
                 <Ionicons name="grid-outline" size={24} color={Theme.colors.white} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Welcome Back</Text>
-              <TouchableOpacity>
-                <Ionicons name="ellipsis-horizontal" size={24} color={Theme.colors.white} />
-              </TouchableOpacity>
+              {user?.role === 'admin' ? (
+                <View style={{ width: 24 }} />
+              ) : (
+                <TouchableOpacity>
+                  <Ionicons name="ellipsis-horizontal" size={24} color={Theme.colors.white} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Balance Info */}
