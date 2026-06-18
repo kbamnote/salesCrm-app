@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1099373587155",
+    "project_id": "tapifysales",
+    "storage_bucket": "tapifysales.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1099373587155:android:8ca99750aa5c1f23400226",
+        "android_client_info": {
+          "package_name": "com.kbamnote.salesTapify"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCd7WTCgEs4BbpMp4p_uiLLZGP3J7M4h_M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

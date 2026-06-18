@@ -33,9 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
-# Firebase / FCM credentials (contain secrets — never commit)
-google-services.json
-GoogleService-Info.plist
+# Firebase Admin SDK service-account key — server secret, NEVER commit.
+# (google-services.json / GoogleService-Info.plist are client configs bundled
+#  into the app and are safe to commit — EAS Build needs them tracked by git.)
 *-firebase-adminsdk-*.json
 
 # typescript
