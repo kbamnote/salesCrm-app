@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { chatApi } from '../../api';
+import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
@@ -118,6 +119,14 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
   }, [chatId, myId]);
 
+  // Append a message if it's not already in the list (dedupe by _id).
+  const upsertMessage = useCallback((m) => {
+    if (!m || !m._id) return;
+    setMessages((prev) => (
+      prev.some((x) => String(x._id) === String(m._id)) ? prev : [...prev, m]
+    ));
+  }, []);
+
   // True when at least one other participant has read my message.
   const isSeenByOthers = useCallback((msg) => {
     const readBy = (msg.readBy || []).map(String).filter((id) => id !== myId);
@@ -128,9 +137,39 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   useEffect(() => {
     loadMessages();
-    const interval = setInterval(loadMessages, 5000);
+    // Socket delivers messages in real time; this slow poll is just a safety net
+    // for anything missed during a socket drop.
+    const interval = setInterval(loadMessages, 15000);
     return () => clearInterval(interval);
   }, [loadMessages]);
+
+  // Real-time: receive new messages + read-receipts over the socket.
+  useEffect(() => {
+    if (!chatId) return undefined;
+    let unsubMsg = null;
+    let unsubRead = null;
+    (async () => {
+      await SocketService.connect();
+      unsubMsg = SocketService.onChat((m) => {
+        if (String(m.chatId) !== String(chatId)) return;
+        upsertMessage(m);
+        // An incoming message from someone else → mark the chat read so the
+        // badge clears and the sender gets a "seen" receipt.
+        if (String(m.fromId) !== myId) chatApi.markRead(chatId).catch(() => {});
+      });
+      unsubRead = SocketService.onChatRead((data) => {
+        if (String(data.chatId) !== String(chatId)) return;
+        if (String(data.readerId) === myId) return;
+        setMessages((prev) => prev.map((m) => {
+          if (String(m.fromId) !== myId) return m;
+          const readBy = (m.readBy || []).map(String);
+          if (readBy.includes(String(data.readerId))) return m;
+          return { ...m, readBy: [...readBy, String(data.readerId)], read: true };
+        }));
+      });
+    })();
+    return () => { if (unsubMsg) unsubMsg(); if (unsubRead) unsubRead(); };
+  }, [chatId, myId, upsertMessage]);
 
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
@@ -153,8 +192,8 @@ export default function ChatRoomScreen({ route, navigation }) {
     setSending(true);
     try {
       const payload = isGroup ? { groupId, content: msgText } : { toId, content: msgText };
-      await chatApi.send(payload);
-      await loadMessages();
+      const sent = await chatApi.send(payload);
+      if (sent?.data) upsertMessage(sent.data); // instant local echo (socket dedupes)
     } catch (e) {
       const errMsg = e.response?.data?.message || 'Failed to send message.';
       Alert.alert('Error', errMsg);

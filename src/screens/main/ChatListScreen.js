@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatApi, usersApi } from '../../api';
+import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
@@ -41,7 +42,20 @@ export default function ChatListScreen({ navigation }) {
     }
   };
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
+  useFocusEffect(useCallback(() => {
+    loadData();
+    // Refresh the list in real time when any message arrives (debounced).
+    let unsub = null;
+    let t = null;
+    (async () => {
+      await SocketService.connect();
+      unsub = SocketService.onChat(() => {
+        if (t) clearTimeout(t);
+        t = setTimeout(loadData, 400);
+      });
+    })();
+    return () => { if (unsub) unsub(); if (t) clearTimeout(t); };
+  }, []));
 
   const getInitials = (name = '') => name.substring(0, 2).toUpperCase() || 'U';
 

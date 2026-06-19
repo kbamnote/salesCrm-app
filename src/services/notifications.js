@@ -7,6 +7,13 @@ import { notificationsApi } from '../api';
 
 const PUSH_TOKEN_KEY = 'expoPushToken';
 
+// Android notification channels. Use FRESH ids (…-v2 / deal) so the custom
+// sounds take effect even on devices that already had the old 'default' channel
+// — Android ignores sound changes to an existing channel.
+// NOTE: these ids MUST match the channelId the backend sends (see push.js).
+export const CHANNEL_DEFAULT = 'default_v2';
+export const CHANNEL_DEAL = 'deal';
+
 // Show notifications while the app is foregrounded too. (Set once at import.)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -19,11 +26,21 @@ Notifications.setNotificationHandler({
 
 async function ensureAndroidChannel() {
   if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync('default', {
-    name: 'Default',
+  // General notifications → notification_sound.mp3
+  await Notifications.setNotificationChannelAsync(CHANNEL_DEFAULT, {
+    name: 'General Notifications',
     importance: Notifications.AndroidImportance.HIGH,
+    sound: 'notification_sound.mp3',
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#4a90e2',
+  });
+  // Deal-closed celebration → clap.mp3
+  await Notifications.setNotificationChannelAsync(CHANNEL_DEAL, {
+    name: 'Deal Closed',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'clap.mp3',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#10B981',
   });
 }
 
@@ -103,8 +120,12 @@ export async function sendLocalTestNotification() {
     if (req.status !== 'granted') return { ok: false, reason: 'permission-denied' };
   }
   await Notifications.scheduleNotificationAsync({
-    content: { title: 'Test notification ✅', body: 'If you can see this, notifications work on this device.' },
-    trigger: null, // immediately
+    content: {
+      title: 'Test notification ✅',
+      body: 'If you can see this, notifications work on this device.',
+      sound: 'notification_sound.mp3',
+    },
+    trigger: Platform.OS === 'android' ? { channelId: CHANNEL_DEFAULT } : null,
   });
   return { ok: true };
 }

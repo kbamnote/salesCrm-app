@@ -3,7 +3,7 @@
     "name": "Tapify Sales Crm",
     "slug": "salestapify",
     "scheme": "tapifysalescrm",
-    "version": "1.0.20",
+    "version": "1.0.22",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -41,7 +41,7 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 44,
+      "versionCode": 46,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -74,7 +74,11 @@
       [
         "expo-notifications",
         {
-          "color": "#4a90e2"
+          "color": "#4a90e2",
+          "sounds": [
+            "./assets/notification_sound.mp3",
+            "./assets/clap.mp3"
+          ]
         }
       ],
       "@react-native-community/datetimepicker"

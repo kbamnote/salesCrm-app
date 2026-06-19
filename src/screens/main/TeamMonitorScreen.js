@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { usersApi, locationsApi, attendanceApi } from '../../api';
+import SocketService from '../../services/location/SocketService';
 import { Theme } from '../../theme/Theme';
 
 const STALE_MS = 12 * 60 * 1000; // no location ping in 12 min => offline/stale
@@ -100,8 +101,34 @@ export default function TeamMonitorScreen({ navigation }) {
     }
   };
 
-  // Re-runs on focus AND whenever the selected date changes.
-  useFocusEffect(useCallback(() => { setLoading(true); load(); }, [selectedDate]));
+  // Re-runs on focus AND whenever the selected date changes. For "today" we also
+  // subscribe to real-time location updates so rows reflect movement live.
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    load();
+    if (selectedDate !== todayStr()) return undefined;
+
+    let unsub = null;
+    (async () => {
+      await SocketService.connect();
+      unsub = SocketService.onLive((loc) => {
+        const uid = String(loc.userId?._id || loc.userId);
+        setRows((prev) => prev.map((r) => {
+          if (String(r.user._id) !== uid) return r;
+          if (loc.status === 'offline') return { ...r, online: false, attendance: 'done' };
+          return {
+            ...r,
+            lat: loc.lat,
+            lng: loc.lng,
+            online: true,
+            attendance: 'working',
+            locLabel: loc.area ? `${loc.area} · just now` : 'just now',
+          };
+        }));
+      });
+    })();
+    return () => { if (unsub) unsub(); };
+  }, [selectedDate]));
 
   const dateLabel = () => {
     if (isToday) return 'Today';
