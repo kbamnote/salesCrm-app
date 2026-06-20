@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -36,6 +36,14 @@ export default function SendWelcomeLetterScreen({ route }) {
 
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
+  // Scroll a focused field into view above the keyboard (Android needs this).
+  const scrollRef = useRef(null);
+  const fieldY = useRef({});
+  const onFieldFocus = (key) => setTimeout(() => {
+    const y = fieldY.current[key];
+    if (y != null) scrollRef.current?.scrollTo({ y: Math.max(y - 20, 0), animated: true });
+  }, 150);
+
   const submit = async () => {
     if (!form.customerEmail.trim()) return Alert.alert('Email required', "Enter the client's email address.");
     if (!form.date.trim()) return Alert.alert('Date required', 'Please enter a date.');
@@ -62,8 +70,12 @@ export default function SendWelcomeLetterScreen({ route }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 320 }} keyboardShouldPersistTaps="handled">
         <View style={styles.banner}>
           <Ionicons name="mail" size={26} color="#fff" />
           <View style={{ flex: 1 }}>
@@ -72,16 +84,19 @@ export default function SendWelcomeLetterScreen({ route }) {
           </View>
         </View>
 
-        <Text style={styles.fieldLabel}>Date</Text>
-        <TextInput style={styles.input} value={form.date} onChangeText={(v) => setF('date', v)} placeholder="e.g. 14-Jun-2026" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.date = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Date</Text>
+          <TextInput style={styles.input} value={form.date} onChangeText={(v) => setF('date', v)} onFocus={() => onFieldFocus('date')} placeholder="e.g. 14-Jun-2026" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
         {FIELDS.map((f) => (
-          <View key={f.key}>
+          <View key={f.key} onLayout={(e) => { fieldY.current[f.key] = e.nativeEvent.layout.y; }}>
             <Text style={styles.fieldLabel}>{f.label}</Text>
             <TextInput
               style={styles.input}
               value={form[f.key]}
               onChangeText={(v) => setF(f.key, v)}
+              onFocus={() => onFieldFocus(f.key)}
               keyboardType={f.kb}
               autoCapitalize={f.key === 'customerEmail' || f.key === 'url' || f.key === 'website' || f.key === 'userId' || f.key === 'password' ? 'none' : 'sentences'}
               placeholder={f.label.replace(' *', '')}

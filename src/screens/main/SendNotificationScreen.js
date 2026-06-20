@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -18,6 +18,10 @@ export default function SendNotificationScreen() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [search, setSearch] = useState('');
+
+  const scrollRef = useRef(null);
+  // Scroll the focused field above the keyboard (Android doesn't do this on its own).
+  const scrollToInput = () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
 
   useEffect(() => {
     if (mode === 'individual' && users.length === 0) {
@@ -63,10 +67,15 @@ export default function SendNotificationScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <ScrollView
+        ref={scrollRef}
         style={styles.container}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 320 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* Mode toggle */}
@@ -144,6 +153,7 @@ export default function SendNotificationScreen() {
             style={styles.input}
             value={title}
             onChangeText={setTitle}
+            onFocus={scrollToInput}
             placeholder="Notification title"
             placeholderTextColor={Theme.colors.textSecondary}
             maxLength={100}
@@ -154,6 +164,7 @@ export default function SendNotificationScreen() {
             style={[styles.input, styles.textarea]}
             value={message}
             onChangeText={setMessage}
+            onFocus={scrollToInput}
             placeholder="Write your message here…"
             placeholderTextColor={Theme.colors.textSecondary}
             multiline

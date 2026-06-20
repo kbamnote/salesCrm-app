@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -15,6 +15,14 @@ export default function SendTitaniumCardScreen({ route }) {
   const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Scroll a focused field into view above the keyboard (Android needs this).
+  const scrollRef = useRef(null);
+  const fieldY = useRef({});
+  const onFieldFocus = (key) => setTimeout(() => {
+    const y = fieldY.current[key];
+    if (y != null) scrollRef.current?.scrollTo({ y: Math.max(y - 20, 0), animated: true });
+  }, 150);
 
   const submit = async () => {
     if (!form.customerEmail.trim()) return Alert.alert('Email required', "Enter the client's email address.");
@@ -40,8 +48,12 @@ export default function SendTitaniumCardScreen({ route }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 320 }} keyboardShouldPersistTaps="handled">
         <View style={styles.banner}>
           <Ionicons name="card" size={26} color="#fff" />
           <View style={{ flex: 1 }}>
@@ -50,25 +62,37 @@ export default function SendTitaniumCardScreen({ route }) {
           </View>
         </View>
 
-        <Text style={styles.fieldLabel}>Date</Text>
-        <TextInput style={styles.input} value={form.date} onChangeText={(v) => setF('date', v)} placeholder="e.g. 14-Jun-2026" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.date = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Date</Text>
+          <TextInput style={styles.input} value={form.date} onChangeText={(v) => setF('date', v)} onFocus={() => onFieldFocus('date')} placeholder="e.g. 14-Jun-2026" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
-        <Text style={styles.fieldLabel}>Customer Name</Text>
-        <TextInput style={styles.input} value={form.customerName} onChangeText={(v) => setF('customerName', v)} placeholder="Customer name" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.customerName = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Customer Name</Text>
+          <TextInput style={styles.input} value={form.customerName} onChangeText={(v) => setF('customerName', v)} onFocus={() => onFieldFocus('customerName')} placeholder="Customer name" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
-        <Text style={styles.fieldLabel}>Customer Email * (where PDF is delivered)</Text>
-        <TextInput style={styles.input} value={form.customerEmail} onChangeText={(v) => setF('customerEmail', v)} keyboardType="email-address" autoCapitalize="none" placeholder="client@example.com" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.customerEmail = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Customer Email * (where PDF is delivered)</Text>
+          <TextInput style={styles.input} value={form.customerEmail} onChangeText={(v) => setF('customerEmail', v)} onFocus={() => onFieldFocus('customerEmail')} keyboardType="email-address" autoCapitalize="none" placeholder="client@example.com" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
         <Text style={styles.sectionLabel}>Card Details</Text>
 
-        <Text style={styles.fieldLabel}>Card Number</Text>
-        <TextInput style={styles.input} value={form.cardNumber} onChangeText={(v) => setF('cardNumber', v)} placeholder="e.g. 290815 2026 200000" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.cardNumber = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Card Number</Text>
+          <TextInput style={styles.input} value={form.cardNumber} onChangeText={(v) => setF('cardNumber', v)} onFocus={() => onFieldFocus('cardNumber')} placeholder="e.g. 290815 2026 200000" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
-        <Text style={styles.fieldLabel}>Valid Thru</Text>
-        <TextInput style={styles.input} value={form.validity} onChangeText={(v) => setF('validity', v)} placeholder="e.g. 01/01/99" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.validity = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Valid Thru</Text>
+          <TextInput style={styles.input} value={form.validity} onChangeText={(v) => setF('validity', v)} onFocus={() => onFieldFocus('validity')} placeholder="e.g. 01/01/99" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
-        <Text style={styles.fieldLabel}>Cardholder / Business Name (on card)</Text>
-        <TextInput style={styles.input} value={form.cardHolderName} onChangeText={(v) => setF('cardHolderName', v)} placeholder="Business name printed on card" placeholderTextColor={Theme.colors.textSecondary} />
+        <View onLayout={(e) => { fieldY.current.cardHolderName = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>Cardholder / Business Name (on card)</Text>
+          <TextInput style={styles.input} value={form.cardHolderName} onChangeText={(v) => setF('cardHolderName', v)} onFocus={() => onFieldFocus('cardHolderName')} placeholder="Business name printed on card" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
 
         <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.7 }]} onPress={submit} disabled={sending}>
           {sending ? <ActivityIndicator color="#fff" /> : <><Ionicons name="send" size={18} color="#fff" /><Text style={styles.sendBtnText}>Send PDF to Client</Text></>}
