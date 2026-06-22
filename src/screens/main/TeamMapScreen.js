@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,16 +53,14 @@ function MarkerGraphic({ name, status, heading }) {
         <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
       </View>
       {status === 'working' ? (
-        // Square box sized to the bike's DIAGONAL so the image never gets
-        // clipped at any rotation angle.
-        <View style={styles.bikeBox}>
-          <Image
-            source={BIKE_ICON}
-            fadeDuration={0}
-            style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
-            resizeMode="contain"
-          />
-        </View>
+        // No wrapper — the bike renders at its own size. (It may clip on sideways
+        // rotation since there's no padding box around it.)
+        <Image
+          source={BIKE_ICON}
+          fadeDuration={0}
+          style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
+          resizeMode="contain"
+        />
       ) : (
         <View style={styles.puck}>
           <View style={[styles.halo, { backgroundColor: color }]} />
@@ -73,17 +71,10 @@ function MarkerGraphic({ name, status, heading }) {
   );
 }
 
-// One rep marker. Manages `tracksViewChanges` — Android only paints a custom
-// (image) marker while this is true, so we keep it on briefly after mount and
-// whenever the visual changes (heading/status), then turn it off to save power.
-function RepMarker({ id, region, name, status, heading, area, ago }) {
-  const [tracks, setTracks] = useState(true);
-  useEffect(() => {
-    setTracks(true);
-    const t = setTimeout(() => setTracks(false), 1200);
-    return () => clearTimeout(t);
-  }, [heading, status, name]);
-
+// One rep marker. Keep `tracksViewChanges` ON so Android always paints the
+// custom (image) marker at full size — toggling it off was freezing a tiny/blank
+// frame. With only a handful of markers the redraw cost is negligible.
+function RepMarker({ region, name, status, heading, area, ago }) {
   const desc = `${status === 'working' ? 'Working' : status === 'done' ? 'Checked out' : 'Offline'}`
     + `${area ? ' · ' + area : ''} · ${ago}`;
 
@@ -91,7 +82,7 @@ function RepMarker({ id, region, name, status, heading, area, ago }) {
     <Marker.Animated
       coordinate={region}
       anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={tracks}
+      tracksViewChanges
       title={name}
       description={desc}
     >
@@ -309,12 +300,12 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2,
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
-  // Square container — comfortably larger than the bike's diagonal (~82) so
-  // rotation never clips, with margin to spare.
-  bikeBox: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  // Square container — larger than the bike's diagonal (~125) so rotation never
+  // clips at any angle.
+  bikeBox: { width: 132, height: 132, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   // Top-down bike (≈132x265, ratio 0.5) — kept at native aspect so it isn't
   // distorted; it rotates within bikeBox.
-  bike: { width: 38, height: 72 },
+  bike: { width: 56, height: 112 },
   // Puck for stationary / checked-out reps (dot + halo).
   puck: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   halo: { position: 'absolute', width: 26, height: 26, borderRadius: 13, opacity: 0.22 },
