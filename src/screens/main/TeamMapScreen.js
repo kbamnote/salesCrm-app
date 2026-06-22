@@ -53,12 +53,16 @@ function MarkerGraphic({ name, status, heading }) {
         <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
       </View>
       {status === 'working' ? (
-        <Image
-          source={BIKE_ICON}
-          fadeDuration={0}
-          style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
-          resizeMode="contain"
-        />
+        // Square box sized to the bike's DIAGONAL so the image never gets
+        // clipped at any rotation angle.
+        <View style={styles.bikeBox}>
+          <Image
+            source={BIKE_ICON}
+            fadeDuration={0}
+            style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
+            resizeMode="contain"
+          />
+        </View>
       ) : (
         <View style={styles.puck}>
           <View style={[styles.halo, { backgroundColor: color }]} />
@@ -305,8 +309,11 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2,
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
-  // Top-down bike marker (rotates to heading). Box matches the image aspect
-  // (≈132x265, ratio 0.5) so it isn't distorted or letterboxed.
+  // Square container — comfortably larger than the bike's diagonal (~82) so
+  // rotation never clips, with margin to spare.
+  bikeBox: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  // Top-down bike (≈132x265, ratio 0.5) — kept at native aspect so it isn't
+  // distorted; it rotates within bikeBox.
   bike: { width: 38, height: 72 },
   // Puck for stationary / checked-out reps (dot + halo).
   puck: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
