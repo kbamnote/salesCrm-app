@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BIKE_ICON = require('../../../assets/bike_marker.png');
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { locationsApi, attendanceApi } from '../../api';
 import SocketService from '../../services/location/SocketService';
@@ -55,6 +55,7 @@ function MarkerGraphic({ name, status, heading }) {
       {status === 'working' ? (
         <Image
           source={BIKE_ICON}
+          fadeDuration={0}
           style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
           resizeMode="contain"
         />
@@ -68,6 +69,33 @@ function MarkerGraphic({ name, status, heading }) {
   );
 }
 
+// One rep marker. Manages `tracksViewChanges` — Android only paints a custom
+// (image) marker while this is true, so we keep it on briefly after mount and
+// whenever the visual changes (heading/status), then turn it off to save power.
+function RepMarker({ id, region, name, status, heading, area, ago }) {
+  const [tracks, setTracks] = useState(true);
+  useEffect(() => {
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), 1200);
+    return () => clearTimeout(t);
+  }, [heading, status, name]);
+
+  const desc = `${status === 'working' ? 'Working' : status === 'done' ? 'Checked out' : 'Offline'}`
+    + `${area ? ' · ' + area : ''} · ${ago}`;
+
+  return (
+    <Marker.Animated
+      coordinate={region}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracks}
+      title={name}
+      description={desc}
+    >
+      <MarkerGraphic name={name} status={status} heading={heading} />
+    </Marker.Animated>
+  );
+}
+
 export default function TeamMapScreen({ route }) {
   const insets = useSafeAreaInsets();
   const focus = route?.params?.focus || null;
@@ -78,6 +106,8 @@ export default function TeamMapScreen({ route }) {
   const mapRef = useRef(null);
   const regionsRef = useRef({}); // id -> AnimatedRegion (smooth coordinate)
   const readyRef = useRef(false);
+  const pointsRef = useRef([]);  // latest points (for fitting once map is ready)
+  const fittedRef = useRef(false); // have we auto-zoomed to the team yet?
 
   const ensureRegion = (id, lat, lng) => {
     if (!regionsRef.current[id]) {
@@ -124,6 +154,16 @@ export default function TeamMapScreen({ route }) {
     }
   }, [focus]);
 
+  // Auto-zoom to the team once, as soon as BOTH the map is ready AND we have
+  // points — handles either order (map ready first, or data first). Without this
+  // the map can stay on the full-India initial region.
+  const tryFit = useCallback(() => {
+    if (readyRef.current && !fittedRef.current && pointsRef.current.length) {
+      fitTo(pointsRef.current);
+      fittedRef.current = true;
+    }
+  }, [fitTo]);
+
   const load = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -162,7 +202,8 @@ export default function TeamMapScreen({ route }) {
         total: points.length,
       });
       points.forEach(upsertMarker);
-      if (readyRef.current) setTimeout(() => fitTo(points), 300);
+      pointsRef.current = points;
+      setTimeout(tryFit, 300); // fit now if map's already ready; else onMapReady will
     } catch (e) {
       console.log('Error loading team map', e);
     } finally {
@@ -183,6 +224,7 @@ export default function TeamMapScreen({ route }) {
 
   useFocusEffect(useCallback(() => {
     setFilter('all');
+    fittedRef.current = false; // re-zoom to the team each time the screen opens
     load();
     let unsub = null;
     (async () => {
@@ -214,21 +256,22 @@ export default function TeamMapScreen({ route }) {
         showsPointsOfInterest={false}
         showsBuildings={false}
         toolbarEnabled={false}
-        onMapReady={() => { readyRef.current = true; fitTo(markers); }}
+        onMapReady={() => { readyRef.current = true; tryFit(); }}
       >
         {visible.map((m) => {
           const region = regionsRef.current[m.id];
           if (!region) return null;
           return (
-            <Marker.Animated
+            <RepMarker
               key={m.id}
-              coordinate={region}
-              anchor={{ x: 0.5, y: 0.5 }}
-              title={m.name}
-              description={`${m.status === 'working' ? 'Working' : m.status === 'done' ? 'Checked out' : 'Offline'}${m.area ? ' · ' + m.area : ''} · ${m.ago}`}
-            >
-              <MarkerGraphic name={m.name} status={m.status} heading={m.heading} />
-            </Marker.Animated>
+              id={m.id}
+              region={region}
+              name={m.name}
+              status={m.status}
+              heading={m.heading}
+              area={m.area}
+              ago={m.ago}
+            />
           );
         })}
       </MapView>
@@ -262,8 +305,9 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2,
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
-  // Top-down bike marker (rotates to heading).
-  bike: { width: 46, height: 46 },
+  // Top-down bike marker (rotates to heading). Box matches the image aspect
+  // (≈132x265, ratio 0.5) so it isn't distorted or letterboxed.
+  bike: { width: 38, height: 72 },
   // Puck for stationary / checked-out reps (dot + halo).
   puck: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   halo: { position: 'absolute', width: 26, height: 26, borderRadius: 13, opacity: 0.22 },
