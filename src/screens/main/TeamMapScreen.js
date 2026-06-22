@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
+
+const BIKE_ICON = require('../../assets/bike_marker.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { locationsApi, attendanceApi } from '../../api';
@@ -9,6 +11,24 @@ import { Theme } from '../../theme/Theme';
 
 const STALE_MS = 12 * 60 * 1000;
 const INDIA_REGION = { latitude: 20.5937, longitude: 78.9629, latitudeDelta: 25, longitudeDelta: 25 };
+
+// Faint / muted map style (Uber-like) so the coloured bike markers stand out.
+// Lightens geometry, softens labels, and hides POI/transit clutter.
+const MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f3f4f6' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#b3b6bb' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f3f4f6' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e6ece6' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e9eaec' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#c2c5ca' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#eceef0' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe6f0' }] },
+];
 
 const colorFor = (s) => (s === 'working' ? '#10B981' : s === 'done' ? '#3B82F6' : '#9CA3AF');
 
@@ -20,31 +40,30 @@ const agoText = (ms) => {
   return `${Math.floor(mins / 60)}h ago`;
 };
 
-const initialsOf = (name = '') =>
-  name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
-
-// Named avatar pin: a coloured avatar bubble with the rep's initials, a small
-// pointer, and the name on a chip below. Optional heading arrow orbits the
-// avatar (kept upright so the name stays readable).
+// Marker: a top-down BIKE icon that rotates to the direction of travel (Uber
+// style) for reps that are out and moving (status 'working'). For checked-out /
+// stationary reps we show a simple coloured puck. The name chip stays upright.
 function MarkerGraphic({ name, status, heading }) {
   const color = colorFor(status);
   const hasHeading = heading != null && !isNaN(heading);
+
   return (
     <View style={styles.pinWrap}>
-      <View style={styles.avatarBox}>
-        {hasHeading && (
-          <View style={[styles.arrowOrbit, { transform: [{ rotate: `${heading}deg` }] }]}>
-            <View style={[styles.headingArrow, { borderBottomColor: color }]} />
-          </View>
-        )}
-        <View style={[styles.avatar, { backgroundColor: color }]}>
-          <Text style={styles.avatarText}>{initialsOf(name)}</Text>
-        </View>
-        <View style={[styles.avatarPointer, { borderTopColor: color }]} />
-      </View>
       <View style={styles.nameChip}>
         <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
       </View>
+      {status === 'working' ? (
+        <Image
+          source={BIKE_ICON}
+          style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
+          resizeMode="contain"
+        />
+      ) : (
+        <View style={styles.puck}>
+          <View style={[styles.halo, { backgroundColor: color }]} />
+          <View style={[styles.centerDot, { backgroundColor: color }]} />
+        </View>
+      )}
     </View>
   );
 }
@@ -75,11 +94,15 @@ export default function TeamMapScreen({ route }) {
     const existing = !!regionsRef.current[p.id];
     const region = ensureRegion(p.id, p.lat, p.lng);
     if (existing) {
-      region.timing({ latitude: p.lat, longitude: p.lng, duration: 1000, useNativeDriver: false }).start();
+      region.timing({ latitude: p.lat, longitude: p.lng, duration: 1500, useNativeDriver: false }).start();
     }
     setMarkers((prev) => {
-      const meta = { id: p.id, name: p.name, status: p.status, heading: p.heading, area: p.area, ago: p.ago || 'just now' };
       const idx = prev.findIndex((m) => m.id === p.id);
+      const prevMeta = idx >= 0 ? prev[idx] : null;
+      // Keep the last known heading when this fix has none (stationary), so the
+      // bike keeps pointing the last travel direction instead of snapping north.
+      const heading = (p.heading != null && !isNaN(p.heading)) ? p.heading : (prevMeta?.heading ?? null);
+      const meta = { id: p.id, name: p.name, status: p.status, heading, area: p.area, ago: p.ago || 'just now' };
       if (idx === -1) return [...prev, meta];
       const copy = prev.slice();
       copy[idx] = { ...copy[idx], ...meta };
@@ -184,9 +207,13 @@ export default function TeamMapScreen({ route }) {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
+        customMapStyle={MAP_STYLE}
         initialRegion={INDIA_REGION}
         showsUserLocation={false}
         showsMyLocationButton={false}
+        showsPointsOfInterest={false}
+        showsBuildings={false}
+        toolbarEnabled={false}
         onMapReady={() => { readyRef.current = true; fitTo(markers); }}
       >
         {visible.map((m) => {
@@ -228,35 +255,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   pinWrap: { alignItems: 'center', justifyContent: 'flex-start' },
-  avatarBox: { width: 44, height: 50, alignItems: 'center', justifyContent: 'flex-start' },
-  avatar: {
-    width: 36, height: 36, borderRadius: 18,
-    borderWidth: 2.5, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3,
-  },
-  avatarText: { color: '#fff', fontSize: 13, fontWeight: '800', fontFamily: Theme.typography.fontFamily },
-  // Small downward pointer under the avatar.
-  avatarPointer: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 7,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    marginTop: -1,
-  },
-  // Orbiting heading arrow (the box rotates; arrow sits at its top).
-  arrowOrbit: { position: 'absolute', top: -8, width: 44, height: 52, alignItems: 'center' },
-  headingArrow: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 9,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-  },
   nameChip: {
-    marginTop: 2, maxWidth: 110,
+    marginBottom: 3, maxWidth: 120,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2,
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2,
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
+  // Top-down bike marker (rotates to heading).
+  bike: { width: 46, height: 46 },
+  // Puck for stationary / checked-out reps (dot + halo).
+  puck: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  halo: { position: 'absolute', width: 26, height: 26, borderRadius: 13, opacity: 0.22 },
+  centerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2.5, borderColor: '#fff' },
   legend: {
     position: 'absolute', top: 12, left: 12, right: 12,
     backgroundColor: 'rgba(255,255,255,0.95)',

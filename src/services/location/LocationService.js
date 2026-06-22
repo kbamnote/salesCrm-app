@@ -15,10 +15,10 @@ import * as Location from 'expo-location';
 
 // Tunables (Uber-grade cadence while moving).
 const MAX_ACCURACY_M = 50;     // reject fixes worse than this radius
-const MOVING_MS = 2500;        // min gap between sends while moving
-const MOVING_DIST_M = 3;       // ...or after this much movement
+const MOVING_MS = 1500;        // min gap between sends while moving
+const MOVING_DIST_M = 2;       // ...or after this much movement
 const STATIONARY_MS = 12000;   // heartbeat gap while stationary
-const MOVING_SPEED = 0.7;      // m/s (~2.5 km/h) — above this we consider "moving"
+const MOVING_SPEED = 0.5;      // m/s (~1.8 km/h) — above this we consider "moving"
 
 let subscription = null;
 let lastSent = null; // { lat, lng, t }
@@ -55,7 +55,7 @@ async function start(onFix) {
   subscription = await Location.watchPositionAsync(
     {
       accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: 2000,    // OS may deliver as often as every 2s while moving
+      timeInterval: 1000,    // OS may deliver as often as every 1s while moving
       distanceInterval: 0,   // we do our own distance throttling in shouldEmit
       mayShowUserSettingsDialog: true,
     },

@@ -38,6 +38,18 @@ const CALL_RESULT_META = {
 // Map the call result to a Call-log outcome value.
 const RESULT_TO_OUTCOME = { no_answer: 'no_answer', interested: 'interested', not_interested: 'not_interested' };
 
+// One detail row in the lead info card (tappable when onPress is given).
+function DetailRow({ icon, label, value, onPress }) {
+  if (!value) return null;
+  return (
+    <TouchableOpacity style={styles.detailRow} disabled={!onPress} activeOpacity={onPress ? 0.6 : 1} onPress={onPress}>
+      <Ionicons name={icon} size={16} color={Theme.colors.primary} style={{ width: 22 }} />
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={[styles.detailValue, onPress && styles.detailLink]} numberOfLines={3}>{value}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'today', label: 'Today' },
@@ -268,6 +280,11 @@ export default function CallsScreen() {
             </View>
             {item.phone ? <Text style={styles.durText}>{item.phone}</Text> : null}
           </View>
+          {(item.city || item.notes) ? (
+            <Text style={styles.leadMeta} numberOfLines={1}>
+              {[item.city, item.notes].filter(Boolean).join(' · ')}
+            </Text>
+          ) : null}
           {item.assignedSales ? (
             <View style={styles.assignedRow}>
               <Ionicons name="arrow-forward" size={11} color="#10B981" />
@@ -283,6 +300,11 @@ export default function CallsScreen() {
       </TouchableOpacity>
     );
   };
+
+  // Split the lead's notes ("Category | https://website") for the detail card.
+  const noteParts = (selectedLead?.notes || '').split('|').map((s) => s.trim()).filter(Boolean);
+  const websiteUrl = noteParts.find((p) => /^https?:\/\//i.test(p));
+  const category = noteParts.find((p) => !/^https?:\/\//i.test(p));
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={Theme.colors.primary} /></View>;
@@ -381,6 +403,30 @@ export default function CallsScreen() {
                   <Text style={styles.callRowText}>Call {selectedLead.phone}</Text>
                 </TouchableOpacity>
               ) : null}
+
+              {/* Lead details — full context for the telecaller */}
+              <View style={styles.detailsCard}>
+                <DetailRow icon="business-outline" label="Business" value={selectedLead?.name} />
+                <DetailRow
+                  icon="call-outline" label="Phone" value={selectedLead?.phone}
+                  onPress={selectedLead?.phone ? () => callLead(selectedLead) : null}
+                />
+                <DetailRow icon="pricetag-outline" label="Type" value={category} />
+                <DetailRow icon="location-outline" label="City" value={selectedLead?.city} />
+                <DetailRow
+                  icon="navigate-outline" label="Address" value={selectedLead?.address}
+                  onPress={selectedLead?.address ? () => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedLead.address)}`) : null}
+                />
+                <DetailRow
+                  icon="mail-outline" label="Email" value={selectedLead?.email}
+                  onPress={selectedLead?.email ? () => Linking.openURL(`mailto:${selectedLead.email}`) : null}
+                />
+                <DetailRow
+                  icon="globe-outline" label="Website" value={websiteUrl}
+                  onPress={websiteUrl ? () => Linking.openURL(websiteUrl) : null}
+                />
+                <DetailRow icon="bookmark-outline" label="Source" value={selectedLead?.source} />
+              </View>
 
               {/* Call outcome */}
               <Text style={styles.fieldLabel}>Call Outcome</Text>
@@ -515,6 +561,14 @@ const styles = StyleSheet.create({
   durText: { fontFamily: Theme.typography.fontFamily, fontSize: 10, color: Theme.colors.textSecondary, fontWeight: '600' },
   assignedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
   assignedText: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: '#10B981', fontWeight: '700' },
+  leadMeta: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 5 },
+
+  // Lead detail card (in the call modal)
+  detailsCard: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: Theme.colors.border, paddingHorizontal: 12, paddingVertical: 4, marginTop: 16 },
+  detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#EEF1F5' },
+  detailLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, fontWeight: '600', width: 64 },
+  detailValue: { fontFamily: Theme.typography.fontFamily, fontSize: 13, color: Theme.colors.text, fontWeight: '600', flex: 1 },
+  detailLink: { color: Theme.colors.primary },
   cardRight: { alignItems: 'flex-end', gap: 8 },
   timeText: { fontFamily: Theme.typography.fontFamily, fontSize: 10, color: Theme.colors.textSecondary },
   callBackBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: Theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center' },
