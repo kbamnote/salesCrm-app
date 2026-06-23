@@ -2,10 +2,8 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const BIKE_ICON = require('../../../assets/bike_marker.png');
 import { useFocusEffect } from '@react-navigation/native';
-import { locationsApi, attendanceApi } from '../../api';
+import { locationsApi, attendanceApi, usersApi } from '../../api';
 import SocketService from '../../services/location/SocketService';
 import { Theme } from '../../theme/Theme';
 
@@ -40,33 +38,31 @@ const agoText = (ms) => {
   return `${Math.floor(mins / 60)}h ago`;
 };
 
-// Marker: a top-down BIKE icon that rotates to the direction of travel (Uber
-// style) for reps that are out and moving (status 'working'). For checked-out /
-// stationary reps we show a simple coloured puck. The name chip stays upright.
-function MarkerGraphic({ name, status, heading }) {
-  const color = colorFor(status);
-  const hasHeading = heading != null && !isNaN(heading);
+const initialsOf = (name = '') =>
+  name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
+const isPhoto = (a) => typeof a === 'string' && /^(https?:|data:image)/.test(a);
+
+// Marker: the rep's PROFILE PHOTO inside a coloured ring (green = working,
+// blue = checked out), a small pointer marking the exact spot, and the name chip
+// above. Falls back to coloured initials when the rep has no photo.
+function MarkerGraphic({ name, status, avatar }) {
+  const color = colorFor(status);
   return (
     <View style={styles.pinWrap}>
       <View style={styles.nameChip}>
         <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
       </View>
-      {status === 'working' ? (
-        // No wrapper — the bike renders at its own size. (It may clip on sideways
-        // rotation since there's no padding box around it.)
-        <Image
-          source={BIKE_ICON}
-          fadeDuration={0}
-          style={[styles.bike, { transform: [{ rotate: `${hasHeading ? heading : 0}deg` }] }]}
-          resizeMode="contain"
-        />
-      ) : (
-        <View style={styles.puck}>
-          <View style={[styles.halo, { backgroundColor: color }]} />
-          <View style={[styles.centerDot, { backgroundColor: color }]} />
-        </View>
-      )}
+      <View style={[styles.avatarRing, { borderColor: color }]}>
+        {isPhoto(avatar) ? (
+          <Image source={{ uri: avatar }} style={styles.avatarImg} fadeDuration={0} />
+        ) : (
+          <View style={[styles.avatarFallback, { backgroundColor: color }]}>
+            <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
+          </View>
+        )}
+      </View>
+      <View style={[styles.avatarPointer, { borderTopColor: color }]} />
     </View>
   );
 }
@@ -74,19 +70,19 @@ function MarkerGraphic({ name, status, heading }) {
 // One rep marker. Keep `tracksViewChanges` ON so Android always paints the
 // custom (image) marker at full size — toggling it off was freezing a tiny/blank
 // frame. With only a handful of markers the redraw cost is negligible.
-function RepMarker({ region, name, status, heading, area, ago }) {
+function RepMarker({ region, name, status, avatar, area, ago }) {
   const desc = `${status === 'working' ? 'Working' : status === 'done' ? 'Checked out' : 'Offline'}`
     + `${area ? ' · ' + area : ''} · ${ago}`;
 
   return (
     <Marker.Animated
       coordinate={region}
-      anchor={{ x: 0.5, y: 0.5 }}
+      anchor={{ x: 0.5, y: 1 }}
       tracksViewChanges
       title={name}
       description={desc}
     >
-      <MarkerGraphic name={name} status={status} heading={heading} />
+      <MarkerGraphic name={name} status={status} avatar={avatar} />
     </Marker.Animated>
   );
 }
@@ -103,6 +99,7 @@ export default function TeamMapScreen({ route }) {
   const readyRef = useRef(false);
   const pointsRef = useRef([]);  // latest points (for fitting once map is ready)
   const fittedRef = useRef(false); // have we auto-zoomed to the team yet?
+  const avatarRef = useRef({});  // userId -> avatar (photo url or initials)
 
   const ensureRegion = (id, lat, lng) => {
     if (!regionsRef.current[id]) {
@@ -124,10 +121,11 @@ export default function TeamMapScreen({ route }) {
     setMarkers((prev) => {
       const idx = prev.findIndex((m) => m.id === p.id);
       const prevMeta = idx >= 0 ? prev[idx] : null;
-      // Keep the last known heading when this fix has none (stationary), so the
-      // bike keeps pointing the last travel direction instead of snapping north.
-      const heading = (p.heading != null && !isNaN(p.heading)) ? p.heading : (prevMeta?.heading ?? null);
-      const meta = { id: p.id, name: p.name, status: p.status, heading, area: p.area, ago: p.ago || 'just now' };
+      const meta = {
+        id: p.id, name: p.name, status: p.status, area: p.area,
+        avatar: p.avatar ?? prevMeta?.avatar, // keep known avatar if a fix omits it
+        ago: p.ago || 'just now',
+      };
       if (idx === -1) return [...prev, meta];
       const copy = prev.slice();
       copy[idx] = { ...copy[idx], ...meta };
@@ -162,7 +160,14 @@ export default function TeamMapScreen({ route }) {
   const load = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const [locRes, attRes] = await Promise.all([locationsApi.list(), attendanceApi.byDate(today)]);
+      const [locRes, attRes, usersRes] = await Promise.all([
+        locationsApi.list(),
+        attendanceApi.byDate(today),
+        usersApi.contacts(),
+      ]);
+
+      // Build userId -> avatar map (used for both snapshot and live updates).
+      (usersRes.data || []).forEach((u) => { avatarRef.current[String(u._id)] = u.avatar; });
 
       const attMap = {};
       (attRes.data || []).forEach((a) => {
@@ -184,7 +189,7 @@ export default function TeamMapScreen({ route }) {
             name: l.name || l.userId?.name || 'Team member',
             lat: l.lat, lng: l.lng,
             area: l.area || '',
-            heading: l.heading ?? null,
+            avatar: avatarRef.current[uid] || l.userId?.avatar,
             status,
             ago: agoText(lastSeenMs),
           };
@@ -207,15 +212,18 @@ export default function TeamMapScreen({ route }) {
   };
 
   // Live location doc → marker point (tracking only runs while punched in).
-  const toPoint = (loc) => ({
-    id: String(loc.userId?._id || loc.userId),
-    name: loc.name || loc.userId?.name || 'Team member',
-    lat: loc.lat, lng: loc.lng,
-    area: loc.area || '',
-    heading: loc.heading ?? null,
-    status: loc.status === 'offline' ? 'done' : 'working',
-    ago: 'just now',
-  });
+  const toPoint = (loc) => {
+    const id = String(loc.userId?._id || loc.userId);
+    return {
+      id,
+      name: loc.name || loc.userId?.name || 'Team member',
+      lat: loc.lat, lng: loc.lng,
+      area: loc.area || '',
+      avatar: avatarRef.current[id],
+      status: loc.status === 'offline' ? 'done' : 'working',
+      ago: 'just now',
+    };
+  };
 
   useFocusEffect(useCallback(() => {
     setFilter('all');
@@ -259,11 +267,10 @@ export default function TeamMapScreen({ route }) {
           return (
             <RepMarker
               key={m.id}
-              id={m.id}
               region={region}
               name={m.name}
               status={m.status}
-              heading={m.heading}
+              avatar={m.avatar}
               area={m.area}
               ago={m.ago}
             />
@@ -300,16 +307,21 @@ const styles = StyleSheet.create({
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2,
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
-  // Square container — larger than the bike's diagonal (~125) so rotation never
-  // clips at any angle.
-  bikeBox: { width: 132, height: 132, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
-  // Top-down bike (≈132x265, ratio 0.5) — kept at native aspect so it isn't
-  // distorted; it rotates within bikeBox.
-  bike: { width: 56, height: 112 },
-  // Puck for stationary / checked-out reps (dot + halo).
-  puck: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  halo: { position: 'absolute', width: 26, height: 26, borderRadius: 13, opacity: 0.22 },
-  centerDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2.5, borderColor: '#fff' },
+  // Profile-photo marker: photo/initials inside a coloured status ring + pointer.
+  avatarRing: {
+    width: 50, height: 50, borderRadius: 25, borderWidth: 3,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3,
+  },
+  avatarImg: { width: 44, height: 44, borderRadius: 22 },
+  avatarFallback: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatarInit: { color: '#fff', fontSize: 16, fontWeight: '800', fontFamily: Theme.typography.fontFamily },
+  // Small downward pointer marking the exact spot (sits at the bottom = anchor).
+  avatarPointer: {
+    width: 0, height: 0, marginTop: -1,
+    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 9,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+  },
   legend: {
     position: 'absolute', top: 12, left: 12, right: 12,
     backgroundColor: 'rgba(255,255,255,0.95)',

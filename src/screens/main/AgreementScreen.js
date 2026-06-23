@@ -27,7 +27,7 @@ export default function AgreementScreen({ navigation }) {
 
   const [f, setF] = useState({
     employeeName: '', relation: 'Son', fatherName: '', age: '',
-    address: '', email: '', designation: '', salary: '',
+    address: '', email: '', designation: '', salary: '', annualSalary: '',
   });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
 
@@ -91,7 +91,8 @@ export default function AgreementScreen({ navigation }) {
         </TouchableOpacity>
         {f.designation ? <Text style={styles.hint}>Duties for “{f.designation}” will be filled automatically.</Text> : null}
 
-        <Field label="Salary / Professional Fees (₹ per month)" value={f.salary} onChange={(v) => set('salary', v)} keyboardType="numeric" placeholder="e.g. 20000" />
+        <Field label="Monthly Salary (₹)" value={f.salary} onChange={(v) => set('salary', v)} keyboardType="numeric" placeholder="e.g. 20000" />
+        <Field label="Annual Salary (₹)" value={f.annualSalary} onChange={(v) => set('annualSalary', v)} keyboardType="numeric" placeholder="Leave blank for 12× monthly" />
 
         <Text style={styles.label}>Agreement Date</Text>
         <TouchableOpacity style={styles.selectBox} onPress={() => setShowDate(true)}>
