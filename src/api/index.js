@@ -97,6 +97,8 @@ export const locationsApi = {
   update: (data) => api.post('/locations/update', data),
   // Oversight: latest location of every visible team member.
   list: () => api.get('/locations'),
+  // A user's route history for a day. params: { from, to } (ISO strings).
+  history: (userId, params) => api.get(`/locations/history/${userId}`, { params }),
 };
 
 export const notificationsApi = {

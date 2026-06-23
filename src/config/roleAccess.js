@@ -39,6 +39,7 @@ export const DRAWER_DEFS = {
   // Tab-capable screens also exposed as drawer items (used by admin's full access).
   HRDashboard:         { title: 'HR Dashboard',    icon: 'grid-outline' },
   TeamMap:             { title: 'Team Map',        icon: 'map-outline' },
+  RouteHistory:        { title: 'Route History',   icon: 'navigate-outline' },
   Onboarding:          { title: 'Onboarding',      icon: 'person-add-outline' },
   Calls:               { title: 'Calls',           icon: 'call-outline' },
   TelecallerDashboard: { title: 'Telecaller Dashboard', icon: 'headset-outline' },
@@ -62,7 +63,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['TeamMonitor', 'TeamProgress', 'Targets', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -83,7 +84,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['CloseDeal', 'SendNotification', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['CloseDeal', 'SendNotification', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -97,7 +98,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
-      'SendNotification', 'HRDashboard', 'TeamMap', 'Onboarding', 'Calls', 'Designs',
+      'SendNotification', 'HRDashboard', 'TeamMap', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
       'PresentationHistory', 'ChatList',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',

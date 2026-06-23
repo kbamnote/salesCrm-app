@@ -50,6 +50,7 @@ import SendWelcomeLetterScreen from '../screens/main/SendWelcomeLetterScreen';
 import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
 import DealCompletedScreen from '../screens/main/DealCompletedScreen';
 import SendNotificationScreen from '../screens/main/SendNotificationScreen';
+import RouteHistoryScreen from '../screens/main/RouteHistoryScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -110,6 +111,7 @@ const DRAWER_COMPONENTS = {
   SendMembership: SendTitaniumCardScreen,
   CloseDeal: CloseDealScreen,
   SendNotification: SendNotificationScreen,
+  RouteHistory: RouteHistoryScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header

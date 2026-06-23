@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { locationsApi, attendanceApi, usersApi } from '../../api';
@@ -30,6 +31,31 @@ const MAP_STYLE = [
 
 const colorFor = (s) => (s === 'working' ? '#10B981' : s === 'done' ? '#3B82F6' : '#9CA3AF');
 
+// Fan out markers that share (almost) the same spot so each rep is visible.
+// Groups by an ~11 m grid; members of a group are placed evenly on a small ring
+// (~18 m) around the shared point. Returns id -> { lat, lng } display position.
+function spreadPositions(markers) {
+  const groups = {};
+  markers.forEach((m) => {
+    if (m.lat == null || m.lng == null) return;
+    const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`;
+    (groups[key] = groups[key] || []).push(m);
+  });
+  const out = {};
+  const R = 0.00016; // ~18 m
+  Object.values(groups).forEach((g) => {
+    if (g.length === 1) {
+      out[g[0].id] = { lat: g[0].lat, lng: g[0].lng };
+      return;
+    }
+    g.forEach((m, i) => {
+      const ang = (2 * Math.PI * i) / g.length;
+      out[m.id] = { lat: m.lat + R * Math.sin(ang), lng: m.lng + R * Math.cos(ang) };
+    });
+  });
+  return out;
+}
+
 const agoText = (ms) => {
   if (!ms) return 'no recent update';
   const mins = Math.floor((Date.now() - ms) / 60000);
@@ -54,35 +80,40 @@ const isPhoto = (a) => typeof a === 'string' && /^(https?:|data:image)/.test(a);
 //    the marker bitmap exactly once, after content is painted: no race, no blank,
 //    no clipping. Native position animation still works with it off.
 function RepMarker({ region, name, status, avatar, area, ago }) {
-  const [tracks, setTracks] = useState(true);
   const color = colorFor(status);
   const photo = isPhoto(avatar);
-
-  useEffect(() => {
-    setTracks(true);
-    if (photo) return undefined;            // photo path stops in onLoad
-    const t = setTimeout(() => setTracks(false), 700);
-    return () => clearTimeout(t);
-  }, [photo, status, name]);
-
-  const stop = () => setTracks(false);
   const desc = `${status === 'working' ? 'Working' : status === 'done' ? 'Checked out' : 'Offline'}`
     + `${area ? ' · ' + area : ''} · ${ago}`;
+
+  // Track view changes only briefly: long enough to capture the loaded photo,
+  // then FREEZE the bitmap so it can't flicker (always-on re-rasterising made the
+  // photo blink in/out). Initials render underneath so the marker is never blank.
+  const [tracks, setTracks] = useState(true);
+  const settle = useRef(null);
+  useEffect(() => {
+    setTracks(true);
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => setTracks(false), photo ? 1500 : 700);
+    return () => clearTimeout(settle.current);
+  }, [photo, status, name, avatar]);
+
+  const onPhotoLoaded = () => {
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => setTracks(false), 400); // capture then freeze
+  };
 
   return (
     <Marker.Animated
       coordinate={region}
-      anchor={{ x: 0.5, y: 1 }}
+      anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracks}
       title={name}
       description={desc}
     >
-      <View style={styles.pinWrap}>
-        <View style={styles.nameChip}>
-          <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
-        </View>
+      {/* Transparent pad around the circle so its edges aren't at the bitmap
+          boundary (Android trims a pixel or two there). Uniform square = no clip. */}
+      <View style={styles.markerPad}>
         <View style={[styles.avatarRing, { borderColor: color }]}>
-          {/* Initials always present → marker is never invisible. */}
           <View style={[styles.avatarFallback, { backgroundColor: color }]}>
             <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
           </View>
@@ -91,12 +122,10 @@ function RepMarker({ region, name, status, avatar, area, ago }) {
               source={{ uri: avatar }}
               style={styles.avatarImgAbs}
               fadeDuration={0}
-              onLoad={() => setTimeout(stop, 250)}
-              onError={stop}
+              onLoad={onPhotoLoaded}
             />
           )}
         </View>
-        <View style={[styles.avatarPointer, { borderTopColor: color }]} />
       </View>
     </Marker.Animated>
   );
@@ -109,6 +138,8 @@ export default function TeamMapScreen({ route }) {
   const [stats, setStats] = useState({ working: 0, done: 0, total: 0 });
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [mapType, setMapType] = useState('standard'); // 'standard' | 'hybrid'
+  const [refreshing, setRefreshing] = useState(false);
   const mapRef = useRef(null);
   const regionsRef = useRef({}); // id -> AnimatedRegion (smooth coordinate)
   const readyRef = useRef(false);
@@ -125,14 +156,11 @@ export default function TeamMapScreen({ route }) {
     return regionsRef.current[id];
   };
 
-  // Add or move a marker. Existing markers glide to the new coordinate.
+  // Add or update a marker. Stores the real lat/lng; the spread effect below
+  // animates each region to its (possibly fanned-out) display position.
   const upsertMarker = useCallback((p) => {
     if (!p || p.lat == null || p.lng == null) return;
-    const existing = !!regionsRef.current[p.id];
-    const region = ensureRegion(p.id, p.lat, p.lng);
-    if (existing) {
-      region.timing({ latitude: p.lat, longitude: p.lng, duration: 1500, useNativeDriver: false }).start();
-    }
+    ensureRegion(p.id, p.lat, p.lng);
     setMarkers((prev) => {
       const idx = prev.findIndex((m) => m.id === p.id);
       const prevMeta = idx >= 0 ? prev[idx] : null;
@@ -140,6 +168,7 @@ export default function TeamMapScreen({ route }) {
         id: p.id, name: p.name, status: p.status, area: p.area,
         avatar: p.avatar ?? prevMeta?.avatar, // keep known avatar if a fix omits it
         ago: p.ago || 'just now',
+        lat: p.lat, lng: p.lng,
       };
       if (idx === -1) return [...prev, meta];
       const copy = prev.slice();
@@ -147,6 +176,19 @@ export default function TeamMapScreen({ route }) {
       return copy;
     });
   }, []);
+
+  // Whenever positions change, fan out any overlapping markers and glide each
+  // region to its display position (so reps at the same spot don't hide each other).
+  useEffect(() => {
+    const disp = spreadPositions(markers);
+    markers.forEach((m) => {
+      const region = regionsRef.current[m.id];
+      const d = disp[m.id];
+      if (region && d) {
+        region.timing({ latitude: d.lat, longitude: d.lng, duration: 600, useNativeDriver: false }).start();
+      }
+    });
+  }, [markers]);
 
   const fitTo = useCallback((pts) => {
     if (!mapRef.current) return;
@@ -226,6 +268,13 @@ export default function TeamMapScreen({ route }) {
     }
   };
 
+  // Manual refresh — re-fetch the snapshot and re-zoom to the team.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    fittedRef.current = false;
+    try { await load(); } finally { setRefreshing(false); }
+  };
+
   // Live location doc → marker point (tracking only runs while punched in).
   const toPoint = (loc) => {
     const id = String(loc.userId?._id || loc.userId);
@@ -267,6 +316,7 @@ export default function TeamMapScreen({ route }) {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
+        mapType={mapType}
         customMapStyle={MAP_STYLE}
         initialRegion={INDIA_REGION}
         showsUserLocation={false}
@@ -307,6 +357,19 @@ export default function TeamMapScreen({ route }) {
           <Text style={[styles.filterText, filter === 'done' && styles.filterTextActive]}>Done ({stats.done})</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Map controls: satellite toggle + manual refresh */}
+      <View style={[styles.controls, { top: insets.top + 80 }]}>
+        <TouchableOpacity
+          style={[styles.ctrlBtn, mapType === 'hybrid' && styles.ctrlBtnActive]}
+          onPress={() => setMapType((t) => (t === 'standard' ? 'hybrid' : 'standard'))}
+        >
+          <Ionicons name={mapType === 'standard' ? 'earth' : 'map'} size={20} color={mapType === 'hybrid' ? '#fff' : Theme.colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.ctrlBtn} onPress={onRefresh} disabled={refreshing}>
+          {refreshing ? <ActivityIndicator size="small" color={Theme.colors.primary} /> : <Ionicons name="refresh" size={20} color={Theme.colors.primary} />}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -317,7 +380,7 @@ const styles = StyleSheet.create({
   // Fixed-size root so Android measures one clean rectangle (prevents the
   // bottom of the marker getting clipped). Content sits at the bottom; the
   // pointer tip aligns to the coordinate via anchor {0.5, 1}.
-  pinWrap: { width: 150, height: 96, alignItems: 'center', justifyContent: 'flex-end', overflow: 'visible' },
+  pinWrap: { width: 170, height: 124, alignItems: 'center', justifyContent: 'flex-end', overflow: 'visible' },
   nameChip: {
     marginBottom: 3, maxWidth: 120,
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -326,20 +389,23 @@ const styles = StyleSheet.create({
   },
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
   // Profile-photo marker: photo/initials inside a coloured status ring + pointer.
+  // Transparent padding so the circle's edges sit away from the bitmap boundary.
+  markerPad: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
+  // No elevation/shadow — Android renders shadows on circular marker views as a
+  // clipped box, which looked like the bottom being "cut".
   avatarRing: {
-    width: 50, height: 50, borderRadius: 25, borderWidth: 3,
+    width: 40, height: 40, borderRadius: 20, borderWidth: 2.5,
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3,
   },
   // Photo overlays the initials (absolute), so the marker shows initials until
   // the photo loads and is never blank.
-  avatarImgAbs: { position: 'absolute', width: 44, height: 44, borderRadius: 22 },
-  avatarFallback: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#fff', fontSize: 16, fontWeight: '800', fontFamily: Theme.typography.fontFamily },
+  avatarImgAbs: { position: 'absolute', width: 35, height: 35, borderRadius: 17.5 },
+  avatarFallback: { width: 35, height: 35, borderRadius: 17.5, alignItems: 'center', justifyContent: 'center' },
+  avatarInit: { color: '#fff', fontSize: 14, fontWeight: '800', fontFamily: Theme.typography.fontFamily },
   // Small downward pointer marking the exact spot (sits at the bottom = anchor).
   avatarPointer: {
     width: 0, height: 0, marginTop: -1,
-    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 9,
+    borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 12,
     borderLeftColor: 'transparent', borderRightColor: 'transparent',
   },
   legend: {
@@ -359,4 +425,11 @@ const styles = StyleSheet.create({
   filterText: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.text, fontWeight: Theme.typography.weights.bold },
   filterTextActive: { color: '#fff' },
   dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: '#fff' },
+  controls: { position: 'absolute', right: 12, alignItems: 'center', gap: 10 },
+  ctrlBtn: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
+  },
+  ctrlBtnActive: { backgroundColor: Theme.colors.primary },
 });
