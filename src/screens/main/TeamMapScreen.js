@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,34 +43,29 @@ const initialsOf = (name = '') =>
 
 const isPhoto = (a) => typeof a === 'string' && /^(https?:|data:image)/.test(a);
 
-// Marker: the rep's PROFILE PHOTO inside a coloured ring (green = working,
-// blue = checked out), a small pointer marking the exact spot, and the name chip
-// above. Falls back to coloured initials when the rep has no photo.
-function MarkerGraphic({ name, status, avatar }) {
-  const color = colorFor(status);
-  return (
-    <View style={styles.pinWrap}>
-      <View style={styles.nameChip}>
-        <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
-      </View>
-      <View style={[styles.avatarRing, { borderColor: color }]}>
-        {isPhoto(avatar) ? (
-          <Image source={{ uri: avatar }} style={styles.avatarImg} fadeDuration={0} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: color }]}>
-            <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
-          </View>
-        )}
-      </View>
-      <View style={[styles.avatarPointer, { borderTopColor: color }]} />
-    </View>
-  );
-}
-
-// One rep marker. Keep `tracksViewChanges` ON so Android always paints the
-// custom (image) marker at full size — toggling it off was freezing a tiny/blank
-// frame. With only a handful of markers the redraw cost is negligible.
+// One rep marker = the rep's PROFILE PHOTO in a coloured status ring, with the
+// name chip above and a pointer marking the exact spot.
+//
+// Robust Android rendering:
+//  - Initials always render synchronously, so the marker is NEVER blank even if
+//    the photo is slow/fails (the photo overlays on top once loaded).
+//  - tracksViewChanges starts true and turns false only AFTER the photo paints
+//    (Image onLoad) — or shortly after mount for initials-only. This captures
+//    the marker bitmap exactly once, after content is painted: no race, no blank,
+//    no clipping. Native position animation still works with it off.
 function RepMarker({ region, name, status, avatar, area, ago }) {
+  const [tracks, setTracks] = useState(true);
+  const color = colorFor(status);
+  const photo = isPhoto(avatar);
+
+  useEffect(() => {
+    setTracks(true);
+    if (photo) return undefined;            // photo path stops in onLoad
+    const t = setTimeout(() => setTracks(false), 700);
+    return () => clearTimeout(t);
+  }, [photo, status, name]);
+
+  const stop = () => setTracks(false);
   const desc = `${status === 'working' ? 'Working' : status === 'done' ? 'Checked out' : 'Offline'}`
     + `${area ? ' · ' + area : ''} · ${ago}`;
 
@@ -78,11 +73,31 @@ function RepMarker({ region, name, status, avatar, area, ago }) {
     <Marker.Animated
       coordinate={region}
       anchor={{ x: 0.5, y: 1 }}
-      tracksViewChanges
+      tracksViewChanges={tracks}
       title={name}
       description={desc}
     >
-      <MarkerGraphic name={name} status={status} avatar={avatar} />
+      <View style={styles.pinWrap}>
+        <View style={styles.nameChip}>
+          <Text style={styles.nameChipText} numberOfLines={1}>{name}</Text>
+        </View>
+        <View style={[styles.avatarRing, { borderColor: color }]}>
+          {/* Initials always present → marker is never invisible. */}
+          <View style={[styles.avatarFallback, { backgroundColor: color }]}>
+            <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
+          </View>
+          {photo && (
+            <Image
+              source={{ uri: avatar }}
+              style={styles.avatarImgAbs}
+              fadeDuration={0}
+              onLoad={() => setTimeout(stop, 250)}
+              onError={stop}
+            />
+          )}
+        </View>
+        <View style={[styles.avatarPointer, { borderTopColor: color }]} />
+      </View>
     </Marker.Animated>
   );
 }
@@ -299,7 +314,10 @@ export default function TeamMapScreen({ route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  pinWrap: { alignItems: 'center', justifyContent: 'flex-start' },
+  // Fixed-size root so Android measures one clean rectangle (prevents the
+  // bottom of the marker getting clipped). Content sits at the bottom; the
+  // pointer tip aligns to the coordinate via anchor {0.5, 1}.
+  pinWrap: { width: 150, height: 96, alignItems: 'center', justifyContent: 'flex-end', overflow: 'visible' },
   nameChip: {
     marginBottom: 3, maxWidth: 120,
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -313,7 +331,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
     elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3,
   },
-  avatarImg: { width: 44, height: 44, borderRadius: 22 },
+  // Photo overlays the initials (absolute), so the marker shows initials until
+  // the photo loads and is never blank.
+  avatarImgAbs: { position: 'absolute', width: 44, height: 44, borderRadius: 22 },
   avatarFallback: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarInit: { color: '#fff', fontSize: 16, fontWeight: '800', fontFamily: Theme.typography.fontFamily },
   // Small downward pointer marking the exact spot (sits at the bottom = anchor).
