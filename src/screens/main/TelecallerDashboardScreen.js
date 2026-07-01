@@ -61,7 +61,10 @@ export default function TelecallerDashboardScreen({ navigation }) {
     );
   }
 
-  const { today, leads, calls, pipeline, sourceCounts, weekTrend, recentLeads, recentCalls } = data;
+  const {
+    today, leads, calls, pipeline, sourceCounts, weekTrend, recentLeads, recentCalls,
+    telecallerStats = [], isAdminView = false,
+  } = data;
   const maxWeek = Math.max(...weekTrend.map(t => t.calls), 1);
   const totalOutcomes = Object.values(calls.outcomeCounts).reduce((a, b) => a + b, 0) || 1;
   const sortedSources = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
@@ -94,7 +97,11 @@ export default function TelecallerDashboardScreen({ navigation }) {
       <View style={styles.banner}>
         <View>
           <Text style={styles.greeting}>Hello, {user?.name?.split(' ')[0] || 'Telecaller'}</Text>
-          <Text style={styles.bannerSub}>{new Date().toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+          <Text style={styles.bannerSub}>
+            {isAdminView
+              ? 'Telecaller team overview'
+              : new Date().toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </Text>
         </View>
         <View style={styles.bannerIcon}>
           <Ionicons name="headset" size={28} color="#fff" />
@@ -111,11 +118,46 @@ export default function TelecallerDashboardScreen({ navigation }) {
 
       {/* Quick stats */}
       <View style={styles.quickRow}>
-        <QuickStat value={leads.total} label="Total Leads" color={Theme.colors.primary} />
+        <QuickStat value={leads.total} label={isAdminView ? 'Team Leads' : 'Total Leads'} color={Theme.colors.primary} />
         <QuickStat value={leads.active} label="Active" color="#3B82F6" />
         <QuickStat value={leads.converted} label="Converted" color="#10B981" />
         <QuickStat value={calls.total} label="Total Calls" color="#F97316" />
       </View>
+
+      {/* Per-telecaller tracking (admin view) */}
+      {isAdminView && (
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="people-circle" size={18} color={Theme.colors.primary} />
+            <Text style={styles.cardTitle}>Telecaller Tracking</Text>
+          </View>
+          {telecallerStats.length === 0 ? (
+            <Text style={styles.emptySmall}>No telecallers found</Text>
+          ) : (
+            telecallerStats.map((t, i) => (
+              <View key={t.id} style={[styles.recentRow, i < telecallerStats.length - 1 && styles.recentBorder]}>
+                <View style={styles.leadAvatar}>
+                  <Text style={styles.leadAvatarText}>{(t.name || 'U').substring(0, 2).toUpperCase()}</Text>
+                </View>
+                <View style={styles.recentInfo}>
+                  <Text style={styles.recentName}>{t.name}</Text>
+                  <View style={styles.recentMeta}>
+                    <Text style={styles.tcStat}>{t.leads} leads</Text>
+                    <Text style={styles.tcDot}>•</Text>
+                    <Text style={styles.tcStat}>{t.calls} calls</Text>
+                    <Text style={styles.tcDot}>•</Text>
+                    <Text style={[styles.tcStat, { color: '#10B981' }]}>{t.converted} won</Text>
+                  </View>
+                </View>
+                <View style={styles.tcTodayWrap}>
+                  <Text style={styles.tcTodayNum}>{t.todayCalls}</Text>
+                  <Text style={styles.tcTodayLbl}>calls today</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      )}
 
       {/* Weekly calls trend */}
       <View style={styles.card}>
@@ -420,6 +462,13 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center',
   },
   leadAvatarText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.primary },
+
+  // Telecaller tracking
+  tcStat: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, fontWeight: '600' },
+  tcDot: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.border },
+  tcTodayWrap: { alignItems: 'center', minWidth: 52 },
+  tcTodayNum: { fontFamily: Theme.typography.fontFamily, fontSize: 18, fontWeight: '800', color: Theme.colors.primary },
+  tcTodayLbl: { fontFamily: Theme.typography.fontFamily, fontSize: 9, color: Theme.colors.textSecondary, fontWeight: '600' },
 
   emptySmall: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, textAlign: 'center', paddingVertical: 16 },
 });

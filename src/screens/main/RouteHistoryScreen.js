@@ -6,6 +6,7 @@ import {
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usersApi, locationsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 
@@ -29,6 +30,7 @@ function routeKm(pts) {
 }
 
 export default function RouteHistoryScreen() {
+  const insets = useSafeAreaInsets();
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(null);
   const [date, setDate] = useState(new Date());
@@ -122,7 +124,7 @@ export default function RouteHistoryScreen() {
 
       {/* Summary */}
       {points.length > 0 && (
-        <View style={styles.summary}>
+        <View style={[styles.summary, { paddingBottom: 12 + 60 + insets.bottom }]}>
           <View style={styles.sumItem}><Text style={styles.sumVal}>{routeKm(points)} km</Text><Text style={styles.sumLbl}>Distance</Text></View>
           <View style={styles.sumDiv} />
           <View style={styles.sumItem}><Text style={styles.sumVal}>{fmtTime(startPt.ts)}</Text><Text style={styles.sumLbl}>Start</Text></View>

@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
-import { chatApi } from '../../api';
+import { chatApi, usersApi } from '../../api';
 import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
@@ -68,34 +68,163 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [previewImage, setPreviewImage] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  const [displayName, setDisplayName] = useState(chatName || 'Chat');
   const [showMembers, setShowMembers] = useState(false);
-  const [groupMembers, setGroupMembers] = useState([]);
+  const [groupInfo, setGroupInfo] = useState(null); // populated group: { name, createdBy, members }
   const [membersLoading, setMembersLoading] = useState(false);
 
+  // Rename
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  // Add members
+  const [addOpen, setAddOpen] = useState(false);
+  const [contacts, setContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [addSelected, setAddSelected] = useState([]);
+  const [adding, setAdding] = useState(false);
+
+  // Per-member remove spinner
+  const [busyMemberId, setBusyMemberId] = useState(null);
+
+  const members = groupInfo?.members || [];
+  const adminId = String(groupInfo?.createdBy?._id || groupInfo?.createdBy || '');
+  const iAmAdmin = !!groupInfo && (adminId === myId || user?.role === 'admin');
+
+  // Keep the header title in sync (updates live after a rename) and, for groups,
+  // show the "people" button that opens the group-info sheet.
   useEffect(() => {
+    navigation.setOptions({ title: displayName });
     if (isGroup && groupId) {
       navigation.setOptions({
         headerRight: () => (
-          <TouchableOpacity onPress={openMembersModal} style={{ marginRight: 12 }}>
+          <TouchableOpacity onPress={openGroupInfo} style={{ marginRight: 12 }}>
             <Ionicons name="people" size={22} color="#fff" />
           </TouchableOpacity>
         ),
       });
     }
-  }, [isGroup, groupId, navigation]);
+  }, [isGroup, groupId, navigation, displayName]);
 
-  const openMembersModal = async () => {
-    setShowMembers(true);
-    if (groupMembers.length > 0) return;
+  const loadGroup = async () => {
     setMembersLoading(true);
     try {
       const res = await chatApi.groupDetail(groupId);
-      setGroupMembers(res.data?.members || []);
+      setGroupInfo(res.data);
+      if (res.data?.name) setDisplayName(res.data.name);
     } catch (e) {
-      console.log('Error loading group members', e);
+      console.log('Error loading group', e);
     } finally {
       setMembersLoading(false);
     }
+  };
+
+  const openGroupInfo = () => {
+    setShowMembers(true);
+    setRenaming(false);
+    loadGroup(); // always refresh so name + members are current
+  };
+
+  const startRename = () => { setNameDraft(displayName); setRenaming(true); };
+
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name) return Alert.alert('Group name', 'Please enter a name.');
+    if (name === displayName) { setRenaming(false); return; }
+    setSavingName(true);
+    try {
+      const res = await chatApi.updateGroup(groupId, { name });
+      setGroupInfo(res.data);
+      setDisplayName(res.data?.name || name);
+      setRenaming(false);
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.message || 'Could not rename the group.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const removeMember = (m) => {
+    Alert.alert('Remove member', `Remove ${m.name} from the group?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setBusyMemberId(String(m._id));
+        try {
+          const res = await chatApi.updateGroup(groupId, { remove: [String(m._id)] });
+          setGroupInfo(res.data);
+        } catch (e) {
+          Alert.alert('Error', e.response?.data?.message || 'Could not remove member.');
+        } finally {
+          setBusyMemberId(null);
+        }
+      } },
+    ]);
+  };
+
+  const openAddMembers = async () => {
+    setAddSelected([]);
+    setAddOpen(true);
+    setContactsLoading(true);
+    try {
+      const res = await usersApi.contacts();
+      const memberIds = new Set(members.map((x) => String(x._id)));
+      setContacts((res.data || []).filter((u) => !memberIds.has(String(u._id))));
+    } catch (e) {
+      console.log('Error loading contacts', e);
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  const toggleAdd = (u) => {
+    const id = String(u._id);
+    setAddSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const confirmAddMembers = async () => {
+    if (addSelected.length === 0) return;
+    setAdding(true);
+    try {
+      const res = await chatApi.updateGroup(groupId, { add: addSelected });
+      setGroupInfo(res.data);
+      setAddOpen(false);
+      setAddSelected([]);
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.message || 'Could not add members.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const leaveGroup = () => {
+    Alert.alert('Exit group', 'You will stop receiving messages from this group.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Exit', style: 'destructive', onPress: async () => {
+        try {
+          await chatApi.leaveGroup(groupId);
+          setShowMembers(false);
+          navigation.goBack();
+        } catch (e) {
+          Alert.alert('Error', e.response?.data?.message || 'Could not exit the group.');
+        }
+      } },
+    ]);
+  };
+
+  const deleteGroup = () => {
+    Alert.alert('Delete group', 'This deletes the group and all its messages for everyone. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await chatApi.deleteGroup(groupId);
+          setShowMembers(false);
+          navigation.goBack();
+        } catch (e) {
+          Alert.alert('Error', e.response?.data?.message || 'Could not delete the group.');
+        }
+      } },
+    ]);
   };
 
   const loadMessages = useCallback(async () => {
@@ -170,6 +299,39 @@ export default function ChatRoomScreen({ route, navigation }) {
     })();
     return () => { if (unsubMsg) unsubMsg(); if (unsubRead) unsubRead(); };
   }, [chatId, myId, upsertMessage]);
+
+  // Real-time group changes: if this group is renamed or its members change,
+  // refresh; if it's deleted or I'm removed, leave the room (WhatsApp-style).
+  useEffect(() => {
+    if (!isGroup || !groupId) return undefined;
+    let unsub = null;
+    (async () => {
+      await SocketService.connect();
+      unsub = SocketService.onGroup(async (data) => {
+        if (String(data?.groupId) !== String(groupId)) return;
+        if (data.deleted) {
+          Alert.alert('Group deleted', 'This group has been deleted.');
+          navigation.goBack();
+          return;
+        }
+        try {
+          const res = await chatApi.groupDetail(groupId);
+          const stillMember = (res.data?.members || []).some((m) => String(m._id) === myId);
+          if (!stillMember) {
+            Alert.alert('Removed', 'You are no longer a member of this group.');
+            navigation.goBack();
+            return;
+          }
+          setGroupInfo(res.data);
+          if (res.data?.name) setDisplayName(res.data.name);
+        } catch (e) {
+          // groupDetail 403 (removed) or 404 (deleted) → leave the room.
+          navigation.goBack();
+        }
+      });
+    })();
+    return () => { if (unsub) unsub(); };
+  }, [isGroup, groupId, myId, navigation]);
 
   useEffect(() => {
     if (messages.length > 0 && flatListRef.current) {
@@ -520,48 +682,177 @@ export default function ChatRoomScreen({ route, navigation }) {
         </View>
       )}
 
-      {/* Group members modal */}
-      <Modal visible={showMembers} transparent animationType="slide">
+      {/* Group info + admin controls */}
+      <Modal visible={showMembers} transparent animationType="slide" onRequestClose={() => setShowMembers(false)}>
         <View style={styles.membersOverlay}>
           <View style={styles.membersSheet}>
             <View style={styles.membersHeader}>
-              <Text style={styles.membersTitle}>Group Members</Text>
+              <Text style={styles.membersTitle}>Group Info</Text>
               <TouchableOpacity onPress={() => setShowMembers(false)}>
                 <Ionicons name="close" size={24} color={Theme.colors.text} />
               </TouchableOpacity>
             </View>
-            {membersLoading ? (
-              <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 30 }} />
+
+            {membersLoading && !groupInfo ? (
+              <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 30, marginBottom: 30 }} />
+            ) : (
+              <>
+                {/* Group name (editable by admin) */}
+                <View style={styles.nameRow}>
+                  {renaming ? (
+                    <>
+                      <TextInput
+                        style={styles.nameInput}
+                        value={nameDraft}
+                        onChangeText={setNameDraft}
+                        autoFocus
+                        placeholder="Group name"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        editable={!savingName}
+                        maxLength={60}
+                      />
+                      <TouchableOpacity onPress={saveName} disabled={savingName} style={styles.nameIconBtn}>
+                        {savingName
+                          ? <ActivityIndicator size="small" color={Theme.colors.primary} />
+                          : <Ionicons name="checkmark" size={22} color={Theme.colors.primary} />}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setRenaming(false)} disabled={savingName} style={styles.nameIconBtn}>
+                        <Ionicons name="close" size={20} color={Theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.groupNameText} numberOfLines={1}>{displayName}</Text>
+                      {iAmAdmin && (
+                        <TouchableOpacity onPress={startRename} style={styles.nameIconBtn}>
+                          <Ionicons name="pencil" size={18} color={Theme.colors.primary} />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
+
+                {/* Members header + Add */}
+                <View style={styles.sectionRow}>
+                  <Text style={styles.sectionLabel}>
+                    {members.length} member{members.length !== 1 ? 's' : ''}
+                  </Text>
+                  {iAmAdmin && (
+                    <TouchableOpacity style={styles.addMembersBtn} onPress={openAddMembers}>
+                      <Ionicons name="person-add" size={16} color={Theme.colors.primary} />
+                      <Text style={styles.addMembersText}>Add</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <FlatList
+                  data={members}
+                  keyExtractor={(item) => String(item._id)}
+                  style={{ maxHeight: 300 }}
+                  renderItem={({ item }) => {
+                    const isMe = String(item._id) === myId;
+                    const memberIsAdmin = String(item._id) === adminId;
+                    const canRemove = iAmAdmin && !memberIsAdmin && !isMe;
+                    return (
+                      <View style={styles.memberRow}>
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>
+                            {(item.name || 'U').substring(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.memberInfo}>
+                          <Text style={styles.memberName}>
+                            {item.name}{isMe ? ' (You)' : ''}
+                          </Text>
+                          {item.role ? <Text style={styles.memberRole}>{item.role}</Text> : null}
+                        </View>
+                        {memberIsAdmin && <Text style={styles.adminBadge}>Admin</Text>}
+                        {canRemove && (
+                          <TouchableOpacity
+                            onPress={() => removeMember(item)}
+                            disabled={busyMemberId === String(item._id)}
+                            style={styles.removeBtn}
+                          >
+                            {busyMemberId === String(item._id)
+                              ? <ActivityIndicator size="small" color="#EF4444" />
+                              : <Ionicons name="remove-circle" size={22} color="#EF4444" />}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  }}
+                  ItemSeparatorComponent={() => <View style={styles.memberSep} />}
+                  ListEmptyComponent={<Text style={styles.membersEmpty}>No members found</Text>}
+                />
+
+                {/* Footer actions */}
+                <View style={styles.groupActions}>
+                  <TouchableOpacity style={styles.leaveBtn} onPress={leaveGroup}>
+                    <Ionicons name="exit-outline" size={18} color="#EF4444" />
+                    <Text style={styles.leaveText}>Exit group</Text>
+                  </TouchableOpacity>
+                  {iAmAdmin && (
+                    <TouchableOpacity style={styles.deleteGroupBtn} onPress={deleteGroup}>
+                      <Ionicons name="trash-outline" size={18} color="#fff" />
+                      <Text style={styles.deleteGroupText}>Delete group</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add members picker (admin) */}
+      <Modal visible={addOpen} transparent animationType="slide" onRequestClose={() => setAddOpen(false)}>
+        <View style={styles.membersOverlay}>
+          <View style={styles.membersSheet}>
+            <View style={styles.membersHeader}>
+              <Text style={styles.membersTitle}>Add Members</Text>
+              <TouchableOpacity onPress={() => setAddOpen(false)} disabled={adding}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            {contactsLoading ? (
+              <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginTop: 30, marginBottom: 30 }} />
             ) : (
               <FlatList
-                data={groupMembers}
+                data={contacts}
                 keyExtractor={(item) => String(item._id)}
+                style={{ maxHeight: 380 }}
                 renderItem={({ item }) => {
-                  const isMe = String(item._id) === myId;
+                  const sel = addSelected.includes(String(item._id));
                   return (
-                    <View style={styles.memberRow}>
+                    <TouchableOpacity style={styles.memberRow} onPress={() => toggleAdd(item)}>
+                      <View style={[styles.checkbox, sel && styles.checkboxActive]}>
+                        {sel && <Ionicons name="checkmark" size={16} color="#fff" />}
+                      </View>
                       <View style={styles.memberAvatar}>
                         <Text style={styles.memberAvatarText}>
                           {(item.name || 'U').substring(0, 2).toUpperCase()}
                         </Text>
                       </View>
                       <View style={styles.memberInfo}>
-                        <Text style={styles.memberName}>
-                          {item.name}{isMe ? ' (You)' : ''}
-                        </Text>
-                        {item.role ? (
-                          <Text style={styles.memberRole}>{item.role}</Text>
-                        ) : null}
+                        <Text style={styles.memberName}>{item.name}</Text>
+                        {item.role ? <Text style={styles.memberRole}>{item.role}</Text> : null}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 }}
                 ItemSeparatorComponent={() => <View style={styles.memberSep} />}
-                ListEmptyComponent={
-                  <Text style={styles.membersEmpty}>No members found</Text>
-                }
+                ListEmptyComponent={<Text style={styles.membersEmpty}>Everyone is already in this group</Text>}
               />
             )}
+            <TouchableOpacity
+              style={[styles.addConfirmBtn, (addSelected.length === 0 || adding) && styles.addConfirmDisabled]}
+              onPress={confirmAddMembers}
+              disabled={addSelected.length === 0 || adding}
+            >
+              {adding
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.addConfirmText}>Add{addSelected.length ? ` (${addSelected.length})` : ''}</Text>}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -871,5 +1162,89 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     textAlign: 'center',
     marginTop: 30,
+  },
+  // ── Group info: name row ──
+  nameRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Theme.colors.border,
+  },
+  groupNameText: {
+    flex: 1, fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.l, fontWeight: Theme.typography.weights.bold,
+    color: Theme.colors.text,
+  },
+  nameInput: {
+    flex: 1, fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.l, fontWeight: Theme.typography.weights.bold,
+    color: Theme.colors.text,
+    borderBottomWidth: 2, borderBottomColor: Theme.colors.primary,
+    paddingVertical: 4, paddingHorizontal: 2,
+  },
+  nameIconBtn: { padding: 8, marginLeft: 4 },
+  // ── Members section header ──
+  sectionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6,
+  },
+  sectionLabel: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s,
+    fontWeight: Theme.typography.weights.bold, color: Theme.colors.textSecondary,
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  addMembersBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: Theme.colors.primary + '15',
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+  },
+  addMembersText: {
+    fontFamily: Theme.typography.fontFamily, fontSize: 13,
+    fontWeight: Theme.typography.weights.bold, color: Theme.colors.primary,
+  },
+  adminBadge: {
+    fontFamily: Theme.typography.fontFamily, fontSize: 11,
+    fontWeight: Theme.typography.weights.bold, color: Theme.colors.primary,
+    backgroundColor: Theme.colors.primary + '15',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden',
+  },
+  removeBtn: { padding: 6, marginLeft: 6 },
+  // ── Add-members checkbox ──
+  checkbox: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    borderColor: Theme.colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  checkboxActive: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
+  // ── Footer actions ──
+  groupActions: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6,
+    borderTopWidth: 1, borderTopColor: Theme.colors.border,
+  },
+  leaveBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: '#EF4444',
+  },
+  leaveText: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s,
+    fontWeight: Theme.typography.weights.bold, color: '#EF4444',
+  },
+  deleteGroupBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: 12, backgroundColor: '#EF4444',
+  },
+  deleteGroupText: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s,
+    fontWeight: Theme.typography.weights.bold, color: '#fff',
+  },
+  // ── Add-members confirm ──
+  addConfirmBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Theme.colors.primary, borderRadius: 12,
+    paddingVertical: 14, marginHorizontal: 20, marginTop: 10,
+  },
+  addConfirmDisabled: { opacity: 0.5 },
+  addConfirmText: {
+    fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m,
+    fontWeight: Theme.typography.weights.bold, color: '#fff',
   },
 });

@@ -57,7 +57,7 @@ export default function ClientsScreen({ navigation }) {
         </View>
         <View style={[styles.badge, getStatusStyle(item.status)]}>
           <Text style={[styles.badgeText, getStatusTextStyle(item.status)]}>
-            {item.status?.toUpperCase()}
+            {statusLabel(item.status).toUpperCase()}
           </Text>
         </View>
       </View>
@@ -143,12 +143,17 @@ export default function ClientsScreen({ navigation }) {
   );
 }
 
+// Prettify a status value for display: 'field_visit' -> 'Field Visit'.
+const statusLabel = (s = '') =>
+  s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
 const getStatusColor = (status) => {
   switch (status) {
     case 'active': return '#10B981';
     case 'prospect': return '#3B82F6';
     case 'inactive': return '#9CA3AF';
     case 'closed': return '#EF4444';
+    case 'field_visit': return '#8B5CF6';
     default: return '#9CA3AF';
   }
 };
@@ -159,6 +164,7 @@ const getStatusStyle = (status) => {
     case 'prospect': return { backgroundColor: '#DBEAFE' };
     case 'closed': return { backgroundColor: '#FEE2E2' };
     case 'inactive': return { backgroundColor: '#F3F4F6' };
+    case 'field_visit': return { backgroundColor: '#EDE9FE' };
     default: return { backgroundColor: Theme.colors.border };
   }
 };
@@ -169,6 +175,7 @@ const getStatusTextStyle = (status) => {
     case 'prospect': return { color: '#1E3A8A' };
     case 'closed': return { color: '#991B1B' };
     case 'inactive': return { color: '#374151' };
+    case 'field_visit': return { color: '#5B21B6' };
     default: return { color: Theme.colors.textSecondary };
   }
 };

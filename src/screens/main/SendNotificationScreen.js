@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { notificationsApi, usersApi } from '../../api';
 import { Theme } from '../../theme/Theme';
+
+const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtTime = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fmtWhen = (d) => `${fmtDate(d)} · ${fmtTime(d)}`;
 
 export default function SendNotificationScreen() {
   const [mode, setMode] = useState('broadcast'); // 'broadcast' | 'individual'
@@ -18,6 +23,47 @@ export default function SendNotificationScreen() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [search, setSearch] = useState('');
+
+  // Scheduling
+  const [scheduleOn, setScheduleOn] = useState(false);
+  const [schedDate, setSchedDate] = useState(() => new Date(Date.now() + 60 * 60 * 1000)); // default: +1h
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [scheduledList, setScheduledList] = useState([]);
+
+  const loadScheduled = () => {
+    notificationsApi.scheduled().then((r) => setScheduledList(r.data || [])).catch(() => {});
+  };
+  useEffect(() => { loadScheduled(); }, []);
+
+  const onDateChange = (e, d) => {
+    setShowDatePicker(false);
+    if (e?.type === 'dismissed' || !d) return;
+    const next = new Date(schedDate);
+    next.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+    setSchedDate(next);
+  };
+  const onTimeChange = (e, d) => {
+    setShowTimePicker(false);
+    if (e?.type === 'dismissed' || !d) return;
+    const next = new Date(schedDate);
+    next.setHours(d.getHours(), d.getMinutes(), 0, 0);
+    setSchedDate(next);
+  };
+
+  const cancelScheduled = (item) => {
+    Alert.alert('Cancel scheduled', `Cancel "${item.title}"?`, [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes, cancel', style: 'destructive', onPress: async () => {
+        try {
+          await notificationsApi.cancelScheduled(item._id);
+          setScheduledList((p) => p.filter((x) => x._id !== item._id));
+        } catch (e) {
+          Alert.alert('Error', 'Could not cancel this scheduled notification.');
+        }
+      } },
+    ]);
+  };
 
   const scrollRef = useRef(null);
   // Scroll the focused field above the keyboard (Android doesn't do this on its own).
@@ -44,21 +90,31 @@ export default function SendNotificationScreen() {
     if (!title.trim()) return Alert.alert('Missing', 'Enter a notification title.');
     if (!message.trim()) return Alert.alert('Missing', 'Enter a message body.');
     if (mode === 'individual' && !selectedUser) return Alert.alert('Missing', 'Select a recipient.');
+    if (scheduleOn && schedDate.getTime() <= Date.now() + 30 * 1000) {
+      return Alert.alert('Schedule time', 'Please pick a time at least a minute in the future.');
+    }
 
     const to = mode === 'broadcast' ? 'all' : selectedUser._id;
     setSending(true);
     try {
-      await notificationsApi.send({ to, title: title.trim(), msg: message.trim(), type: 'system' });
+      const payload = { to, title: title.trim(), msg: message.trim(), type: 'system' };
+      if (mode === 'individual') payload.toName = selectedUser.name;
+      if (scheduleOn) payload.scheduledAt = schedDate.toISOString();
+
+      await notificationsApi.send(payload);
       Alert.alert(
-        'Sent',
-        mode === 'broadcast'
-          ? 'Broadcast notification sent to all users.'
-          : `Notification sent to ${selectedUser.name}.`,
+        scheduleOn ? 'Scheduled' : 'Sent',
+        scheduleOn
+          ? `Notification scheduled for ${fmtWhen(schedDate)}.`
+          : (mode === 'broadcast'
+              ? 'Broadcast notification sent to all users.'
+              : `Notification sent to ${selectedUser.name}.`),
       );
       setTitle('');
       setMessage('');
       setSelectedUser(null);
       setSearch('');
+      if (scheduleOn) loadScheduled();
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to send notification.');
     } finally {
@@ -175,7 +231,48 @@ export default function SendNotificationScreen() {
           <Text style={styles.charCount}>{message.length}/500</Text>
         </View>
 
-        {/* Send button */}
+        {/* Delivery: now or scheduled */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Delivery</Text>
+          <View style={styles.schedRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.schedLabel}>Schedule for later</Text>
+              <Text style={styles.schedHint}>{scheduleOn ? fmtWhen(schedDate) : 'Send immediately'}</Text>
+            </View>
+            <Switch
+              value={scheduleOn}
+              onValueChange={setScheduleOn}
+              trackColor={{ true: Theme.colors.primary, false: '#cbd5e1' }}
+              thumbColor="#fff"
+            />
+          </View>
+          {scheduleOn && (
+            <View style={styles.pickerRow}>
+              <TouchableOpacity style={styles.pickBtn} onPress={() => setShowDatePicker(true)}>
+                <Ionicons name="calendar-outline" size={16} color={Theme.colors.primary} />
+                <Text style={styles.pickText}>{fmtDate(schedDate)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pickBtn} onPress={() => setShowTimePicker(true)}>
+                <Ionicons name="time-outline" size={16} color={Theme.colors.primary} />
+                <Text style={styles.pickText}>{fmtTime(schedDate)}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {showDatePicker && (
+            <DateTimePicker
+              value={schedDate} mode="date" minimumDate={new Date()}
+              display={Platform.OS === 'ios' ? 'inline' : 'default'} onChange={onDateChange}
+            />
+          )}
+          {showTimePicker && (
+            <DateTimePicker
+              value={schedDate} mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={onTimeChange}
+            />
+          )}
+        </View>
+
+        {/* Send / Schedule button */}
         <TouchableOpacity
           style={[styles.sendBtn, sending && { opacity: 0.7 }]}
           onPress={send}
@@ -185,13 +282,38 @@ export default function SendNotificationScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="send" size={18} color="#fff" />
+              <Ionicons name={scheduleOn ? 'time-outline' : 'send'} size={18} color="#fff" />
               <Text style={styles.sendBtnText}>
-                {mode === 'broadcast' ? 'Send to All Users' : `Send to ${selectedUser?.name || 'User'}`}
+                {scheduleOn
+                  ? 'Schedule Notification'
+                  : (mode === 'broadcast' ? 'Send to All Users' : `Send to ${selectedUser?.name || 'User'}`)}
               </Text>
             </>
           )}
         </TouchableOpacity>
+
+        {/* Upcoming scheduled */}
+        {scheduledList.length > 0 && (
+          <View style={[styles.card, { marginTop: 14 }]}>
+            <Text style={styles.cardTitle}>Upcoming Scheduled ({scheduledList.length})</Text>
+            {scheduledList.map((s) => (
+              <View key={s._id} style={styles.schedItem}>
+                <View style={styles.schedIcon}>
+                  <Ionicons name="alarm-outline" size={16} color={Theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.schedItemTitle} numberOfLines={1}>{s.title}</Text>
+                  <Text style={styles.schedItemMeta} numberOfLines={1}>
+                    {s.to === 'all' ? 'All users' : (s.toName || 'Individual')} · {fmtWhen(s.scheduledAt)}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => cancelScheduled(s)} style={styles.cancelBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -258,4 +380,21 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.primary, borderRadius: 14, paddingVertical: 15,
   },
   sendBtnText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Scheduling
+  schedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  schedLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 14, fontWeight: '700', color: Theme.colors.text },
+  schedHint: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2 },
+  pickerRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  pickBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border, paddingVertical: 11,
+  },
+  pickText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
+
+  schedItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  schedIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: Theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  schedItemTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
+  schedItemMeta: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 2 },
+  cancelBtn: { padding: 4 },
 });

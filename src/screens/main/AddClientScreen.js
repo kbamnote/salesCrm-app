@@ -7,7 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { clientsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 
-const STATUSES = ['prospect', 'active', 'inactive', 'closed'];
+const STATUSES = ['prospect', 'active', 'inactive', 'closed', 'field_visit'];
+
+// Prettify a status value for display: 'field_visit' -> 'Field Visit'.
+const statusLabel = (s = '') =>
+  s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 export default function AddClientScreen({ navigation, route }) {
   const existing = route.params?.client;
@@ -125,7 +129,7 @@ export default function AddClientScreen({ navigation, route }) {
           <Text style={styles.label}>Status</Text>
           <TouchableOpacity style={styles.selector} onPress={() => setShowStatusPicker(!showStatusPicker)}>
             <View style={[styles.statusDot, { backgroundColor: getStatusColor(status) }]} />
-            <Text style={styles.selectorText}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
+            <Text style={styles.selectorText}>{statusLabel(status)}</Text>
             <Ionicons name={showStatusPicker ? 'chevron-up' : 'chevron-down'} size={20} color={Theme.colors.textSecondary} />
           </TouchableOpacity>
           {showStatusPicker && (
@@ -133,7 +137,7 @@ export default function AddClientScreen({ navigation, route }) {
               {STATUSES.map((s) => (
                 <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setStatus(s); setShowStatusPicker(false); }}>
                   <View style={[styles.statusDot, { backgroundColor: getStatusColor(s) }]} />
-                  <Text style={styles.dropdownText}>{s.charAt(0).toUpperCase() + s.slice(1)}</Text>
+                  <Text style={styles.dropdownText}>{statusLabel(s)}</Text>
                   {status === s && <Ionicons name="checkmark" size={18} color={Theme.colors.primary} />}
                 </TouchableOpacity>
               ))}
@@ -174,13 +178,14 @@ const getStatusColor = (status) => {
     case 'prospect': return '#3B82F6';
     case 'inactive': return '#9CA3AF';
     case 'closed': return '#EF4444';
+    case 'field_visit': return '#8B5CF6';
     default: return '#9CA3AF';
   }
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.surface },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 120 },
   section: {
     backgroundColor: Theme.colors.white,
     marginHorizontal: Theme.spacing.m,

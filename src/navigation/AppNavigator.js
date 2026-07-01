@@ -120,7 +120,7 @@ const DRAWER_SCREENS_OWN_HEADER = ['Onboarding'];
 
 // Screens where we do NOT want to show the tab bar (detail/form screens)
 const HIDDEN_TAB_SCREENS = [
-  'Login', 'AddLead', 'LeadDetail', 'AddClient', 'ClientDetail',
+  'Login', 'AddLead', 'LeadDetail', 'ClientDetail',
   'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
   'PayrollEmployee', 'PayslipDetail', 'DealCompleted', 'SendWelcome', 'SendMembership',
 ];

@@ -13,7 +13,12 @@ const STATUS_COLORS = {
   prospect: { bg: '#DBEAFE', text: '#1E3A8A', dot: '#3B82F6' },
   inactive: { bg: '#F3F4F6', text: '#374151', dot: '#9CA3AF' },
   closed: { bg: '#FEE2E2', text: '#991B1B', dot: '#EF4444' },
+  field_visit: { bg: '#EDE9FE', text: '#5B21B6', dot: '#8B5CF6' },
 };
+
+// Prettify a status value for display: 'field_visit' -> 'Field Visit'.
+const statusLabel = (s = '') =>
+  s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
@@ -85,7 +90,7 @@ export default function ClientDetailScreen({ route, navigation }) {
         <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
           <View style={[styles.statusDot, { backgroundColor: sc.dot }]} />
           <Text style={[styles.statusText, { color: sc.text }]}>
-            {client.status?.charAt(0).toUpperCase() + client.status?.slice(1)}
+            {statusLabel(client.status)}
           </Text>
         </View>
 
@@ -140,7 +145,7 @@ export default function ClientDetailScreen({ route, navigation }) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Update Status</Text>
         <View style={styles.statusGrid}>
-          {['prospect', 'active', 'inactive', 'closed'].map((s) => {
+          {['prospect', 'active', 'inactive', 'closed', 'field_visit'].map((s) => {
             const c = STATUS_COLORS[s] || { bg: '#F3F4F6', text: '#374151', dot: '#9CA3AF' };
             const isActive = client.status === s;
             return (
@@ -150,7 +155,7 @@ export default function ClientDetailScreen({ route, navigation }) {
                 onPress={() => handleUpdateStatus(s)}
               >
                 <Text style={[styles.statusChipText, { color: c.text }, isActive && styles.statusChipTextActive]}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  {statusLabel(s)}
                 </Text>
                 {isActive && <Ionicons name="checkmark-circle" size={14} color={c.dot} style={{ marginLeft: 4 }} />}
               </TouchableOpacity>

@@ -4,21 +4,15 @@ import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { tapifyCardApi, dealsApi } from '../../api';
+import { tapifyCardApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 
 const INR = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN');
 
-const PAY_MODES = [
-  { key: 'cash', label: 'Cash', icon: 'cash-outline' },
-  { key: 'pdc', label: 'PDC', icon: 'document-outline' },
-  { key: 'upi', label: 'UPI', icon: 'qr-code-outline' },
-  { key: 'card', label: 'Card', icon: 'card-outline' },
-];
-const REF_LABEL = { cash: 'Receipt No. (optional)', pdc: 'Cheque No. & Date', upi: 'UPI Ref / Txn ID', card: 'Card Txn / Ref ID' };
-
 export default function DealCompletedScreen({ route, navigation }) {
-  const { meetingId, client, amount } = route.params || {};
+  // Payment is collected on the wizard's payment step; this screen only handles
+  // the post-deal actions (Tapify card + documents).
+  const { client, amount } = route.params || {};
 
   // ── Tapify card ──
   const [card, setCard] = useState({
@@ -74,28 +68,6 @@ export default function DealCompletedScreen({ route, navigation }) {
 
   const goTitanium = () => {
     navigation.navigate('SendMembership', { customerName: card.name, customerEmail: card.email });
-  };
-
-  // ── Payment ──
-  const [pay, setPay] = useState({ mode: 'cash', amount: amount ? String(amount) : '', ref: '' });
-  const [paying, setPaying] = useState(false);
-  const [paidStatus, setPaidStatus] = useState(null);
-  const setP = (k, v) => setPay((p) => ({ ...p, [k]: v }));
-
-  const collectPayment = async () => {
-    if (!meetingId) return Alert.alert('Error', 'Deal reference missing.');
-    if (!(Number(pay.amount) > 0)) return Alert.alert('Amount', 'Enter a valid amount.');
-    setPaying(true);
-    try {
-      const res = await dealsApi.addPayment(meetingId, { mode: pay.mode, amount: Number(pay.amount), ref: pay.ref.trim() });
-      setPaidStatus(res.data?.paymentStatus || 'partial');
-      Alert.alert('Payment recorded ✅', `Status: ${res.data?.paymentStatus || 'recorded'} (collected ${INR(res.data?.totalPaid)} of ${INR(res.data?.target)}).`);
-      setPay((p) => ({ ...p, ref: '' }));
-    } catch (e) {
-      Alert.alert('Error', e.response?.data?.error || 'Could not record the payment.');
-    } finally {
-      setPaying(false);
-    }
   };
 
   return (
@@ -157,41 +129,6 @@ export default function DealCompletedScreen({ route, navigation }) {
           {!cardResult ? <Text style={styles.hint}>Tip: create the card first so the welcome letter is pre-filled with the login details.</Text> : null}
         </View>
 
-        {/* 3. Collect payment */}
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <View style={[styles.stepBadge, paidStatus === 'paid' && styles.stepDone]}>
-              {paidStatus === 'paid' ? <Ionicons name="checkmark" size={14} color="#fff" /> : <Text style={styles.stepNum}>3</Text>}
-            </View>
-            <Text style={styles.cardTitle}>Collect Payment</Text>
-          </View>
-
-          <Text style={styles.fieldLabel}>Payment Mode</Text>
-          <View style={styles.modeRow}>
-            {PAY_MODES.map((m) => {
-              const active = pay.mode === m.key;
-              return (
-                <TouchableOpacity key={m.key} style={[styles.modeChip, active && styles.modeChipActive]} onPress={() => setP('mode', m.key)}>
-                  <Ionicons name={m.icon} size={16} color={active ? '#fff' : Theme.colors.primary} />
-                  <Text style={[styles.modeText, active && { color: '#fff' }]}>{m.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Field label="Amount (₹)" value={pay.amount} onChange={(v) => setP('amount', v)} keyboardType="numeric" />
-          <Field label={REF_LABEL[pay.mode]} value={pay.ref} onChange={(v) => setP('ref', v)} />
-
-          <TouchableOpacity style={[styles.primaryBtn, paying && { opacity: 0.7 }]} onPress={collectPayment} disabled={paying}>
-            {paying ? <ActivityIndicator color="#fff" /> : <><Ionicons name="wallet-outline" size={18} color="#fff" /><Text style={styles.primaryBtnText}>Record Payment</Text></>}
-          </TouchableOpacity>
-
-          <View style={styles.razorpayNote}>
-            <Ionicons name="flash-outline" size={14} color={Theme.colors.textSecondary} />
-            <Text style={styles.razorpayText}>Online payment (Razorpay) coming soon.</Text>
-          </View>
-        </View>
-
         <TouchableOpacity style={styles.doneBtn} onPress={() => navigation.navigate('Root')}>
           <Text style={styles.doneText}>Done</Text>
         </TouchableOpacity>
@@ -242,14 +179,6 @@ const styles = StyleSheet.create({
   docBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 10 },
   docBtnText: { flex: 1, fontFamily: Theme.typography.fontFamily, fontSize: 14, fontWeight: '700', color: Theme.colors.text },
   hint: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 2, lineHeight: 16 },
-
-  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: Theme.colors.border, backgroundColor: '#fff' },
-  modeChipActive: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
-  modeText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.primary },
-
-  razorpayNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, justifyContent: 'center' },
-  razorpayText: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, fontStyle: 'italic' },
 
   doneBtn: { alignItems: 'center', paddingVertical: 14 },
   doneText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '700', color: Theme.colors.primary },

@@ -17,6 +17,7 @@ const liveListeners = new Set();    // callbacks for `location:live`
 const connectListeners = new Set(); // callbacks fired when (re)connected
 const chatListeners = new Set();    // callbacks for `chat:message`
 const chatReadListeners = new Set(); // callbacks for `chat:read`
+const chatGroupListeners = new Set(); // callbacks for `chat:group` (renamed / members changed / deleted)
 
 async function connect() {
   if (socket && socket.connected) return socket;
@@ -46,6 +47,9 @@ async function connect() {
     });
     socket.on('chat:read', (data) => {
       chatReadListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('chat:group', (data) => {
+      chatGroupListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
     });
     socket.on('connect_error', (e) => console.log('[Socket] connect_error:', e.message));
   } else {
@@ -108,7 +112,13 @@ function onChatRead(cb) {
   return () => chatReadListeners.delete(cb);
 }
 
+// Subscribe to group changes (rename / members / delete). Returns an unsubscribe fn.
+function onGroup(cb) {
+  chatGroupListeners.add(cb);
+  return () => chatGroupListeners.delete(cb);
+}
+
 export default {
   connect, disconnect, isConnected, emitLocation,
-  onLive, onConnect, onChat, onChatRead,
+  onLive, onConnect, onChat, onChatRead, onGroup,
 };

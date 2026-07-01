@@ -80,6 +80,11 @@ export const tapifyCardApi = {
 
 export const designsApi = {
   list: () => api.get('/designs'),
+  // Upload a design (designer/admin/manager). { title, imageUrl } — imageUrl is a
+  // hosted URL (we upload the image to Cloudinary first, same as the web panel).
+  create: (data) => api.post('/designs', data),
+  // Delete a design — allowed for the uploader or an admin.
+  remove: (id) => api.delete(`/designs/${id}`),
 };
 
 export const offerLetterApi = {
@@ -108,8 +113,12 @@ export const notificationsApi = {
   registerToken: (token) => api.post('/notifications/push-token', { token }),
   removeToken: (token) => api.post('/notifications/push-token/remove', { token }),
   testPush: () => api.post('/notifications/test-push'),
-  // Admin/HR: send broadcast (to:'all') or individual (to: userId)
+  // Admin/HR: send broadcast (to:'all') or individual (to: userId).
+  // Pass scheduledAt (ISO string) to queue it for later instead of sending now.
   send: (data) => api.post('/notifications', data),
+  // Admin/HR: pending scheduled notifications + cancel.
+  scheduled: () => api.get('/notifications/scheduled'),
+  cancelScheduled: (id) => api.delete(`/notifications/scheduled/${id}`),
 };
 
 export const chatApi = {
@@ -119,6 +128,10 @@ export const chatApi = {
   groups: () => api.get('/chat/groups'),
   groupDetail: (id) => api.get(`/chat/groups/${id}`),
   createGroup: (data) => api.post('/chat/groups', data),
+  // Group admin actions. updateGroup body: { name?, add?: [ids], remove?: [ids] }.
+  updateGroup: (id, data) => api.patch(`/chat/groups/${id}`, data),
+  leaveGroup: (id) => api.post(`/chat/groups/${id}/leave`),
+  deleteGroup: (id) => api.delete(`/chat/groups/${id}`),
   // Mark all messages in a chat (from others) as read by the current user.
   markRead: (chatId) => api.post(`/chat/${chatId}/read`),
 };

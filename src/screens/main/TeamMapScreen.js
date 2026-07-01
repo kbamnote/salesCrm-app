@@ -113,18 +113,20 @@ function RepMarker({ region, name, status, avatar, area, ago }) {
       {/* Transparent pad around the circle so its edges aren't at the bitmap
           boundary (Android trims a pixel or two there). Uniform square = no clip. */}
       <View style={styles.markerPad}>
-        <View style={[styles.avatarRing, { borderColor: color }]}>
-          <View style={[styles.avatarFallback, { backgroundColor: color }]}>
-            <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
+        <View style={[styles.avatarRing, { backgroundColor: color }]}>
+          <View style={styles.avatarInner}>
+            <View style={[styles.avatarFallback, { backgroundColor: color }]}>
+              <Text style={styles.avatarInit}>{initialsOf(name)}</Text>
+            </View>
+            {photo && (
+              <Image
+                source={{ uri: avatar }}
+                style={styles.avatarImgAbs}
+                fadeDuration={0}
+                onLoad={onPhotoLoaded}
+              />
+            )}
           </View>
-          {photo && (
-            <Image
-              source={{ uri: avatar }}
-              style={styles.avatarImgAbs}
-              fadeDuration={0}
-              onLoad={onPhotoLoaded}
-            />
-          )}
         </View>
       </View>
     </Marker.Animated>
@@ -306,6 +308,20 @@ export default function TeamMapScreen({ route }) {
 
   const visible = filter === 'all' ? markers : markers.filter((m) => m.status === filter);
 
+  // "Fit all" — one tap frames every rep currently on the map (respects the active
+  // filter). Uses the live marker positions, not just the initial snapshot.
+  const fitAll = () => {
+    const coords = visible
+      .filter((m) => m.lat != null && m.lng != null)
+      .map((m) => ({ latitude: m.lat, longitude: m.lng }));
+    if (!mapRef.current || coords.length === 0) return;
+    if (coords.length === 1) {
+      mapRef.current.animateToRegion({ ...coords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500);
+    } else {
+      mapRef.current.fitToCoordinates(coords, { edgePadding: { top: 100, right: 70, bottom: 130, left: 70 }, animated: true });
+    }
+  };
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={Theme.colors.primary} /></View>;
   }
@@ -358,8 +374,11 @@ export default function TeamMapScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Map controls: satellite toggle + manual refresh */}
+      {/* Map controls: fit-all + satellite toggle + manual refresh */}
       <View style={[styles.controls, { top: insets.top + 80 }]}>
+        <TouchableOpacity style={styles.ctrlBtn} onPress={fitAll}>
+          <Ionicons name="scan-outline" size={20} color={Theme.colors.primary} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.ctrlBtn, mapType === 'hybrid' && styles.ctrlBtnActive]}
           onPress={() => setMapType((t) => (t === 'standard' ? 'hybrid' : 'standard'))}
@@ -390,12 +409,23 @@ const styles = StyleSheet.create({
   nameChipText: { fontSize: 10, fontWeight: '700', color: Theme.colors.text, fontFamily: Theme.typography.fontFamily },
   // Profile-photo marker: photo/initials inside a coloured status ring + pointer.
   // Transparent padding so the circle's edges sit away from the bitmap boundary.
-  markerPad: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
-  // No elevation/shadow — Android renders shadows on circular marker views as a
-  // clipped box, which looked like the bottom being "cut".
+  // Extra transparent margin so the coloured disc never sits at the bitmap edge —
+  // Android trims the outermost pixels when rasterising a marker view, which read
+  // as the circle being "cut" on some densities.
+  markerPad: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center' },
+  // The status ring is a SOLID coloured disc. We deliberately do NOT put a border +
+  // overflow:hidden + borderRadius on the same node — that combo makes some Android
+  // GPUs render a flat, clipped edge (the "slightly cut" circle). No shadow either.
   avatarRing: {
-    width: 40, height: 40, borderRadius: 20, borderWidth: 2.5,
-    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // Inner circle clips the photo/initials. It's inset ~2.5px from the disc, so the
+  // coloured annulus shows as the ring — and any sub-pixel clipping lands on the
+  // colour, never at the transparent bitmap boundary.
+  avatarInner: {
+    width: 35, height: 35, borderRadius: 17.5, overflow: 'hidden',
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
   },
   // Photo overlays the initials (absolute), so the marker shows initials until
   // the photo loads and is never blank.

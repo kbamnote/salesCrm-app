@@ -44,17 +44,18 @@ export default function ChatListScreen({ navigation }) {
 
   useFocusEffect(useCallback(() => {
     loadData();
-    // Refresh the list in real time when any message arrives (debounced).
+    // Refresh the list in real time when a message arrives or a group changes
+    // (renamed / members changed / deleted) — debounced.
     let unsub = null;
+    let unsubGroup = null;
     let t = null;
+    const refresh = () => { if (t) clearTimeout(t); t = setTimeout(loadData, 400); };
     (async () => {
       await SocketService.connect();
-      unsub = SocketService.onChat(() => {
-        if (t) clearTimeout(t);
-        t = setTimeout(loadData, 400);
-      });
+      unsub = SocketService.onChat(refresh);
+      unsubGroup = SocketService.onGroup(refresh);
     })();
-    return () => { if (unsub) unsub(); if (t) clearTimeout(t); };
+    return () => { if (unsub) unsub(); if (unsubGroup) unsubGroup(); if (t) clearTimeout(t); };
   }, []));
 
   const getInitials = (name = '') => name.substring(0, 2).toUpperCase() || 'U';
