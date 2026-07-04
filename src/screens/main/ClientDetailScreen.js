@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { clientsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
+import WhatsAppComposeModal from '../../components/WhatsAppComposeModal';
 
 const STATUS_COLORS = {
   active: { bg: '#D1FAE5', text: '#065F46', dot: '#10B981' },
@@ -25,6 +26,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const loadClient = async () => {
     try {
@@ -109,7 +111,7 @@ export default function ClientDetailScreen({ route, navigation }) {
             </View>
             <Text style={styles.actionLabel}>Call</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleWhatsApp}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setComposeOpen(true)}>
             <View style={[styles.actionIcon, { backgroundColor: '#DCFCE7' }]}>
               <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
             </View>
@@ -178,6 +180,12 @@ export default function ClientDetailScreen({ route, navigation }) {
         {client.createdAt ? <InfoRow icon="time-outline" label="Created" value={new Date(client.createdAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })} /> : null}
         {client.updatedAt ? <InfoRow icon="refresh-outline" label="Last Updated" value={new Date(client.updatedAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })} /> : null}
       </View>
+
+      <WhatsAppComposeModal
+        visible={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        recipient={{ phone: client.phone, name: client.name, entity: 'client', entityId: client._id }}
+      />
     </ScrollView>
   );
 }

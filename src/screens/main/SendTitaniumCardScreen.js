@@ -10,9 +10,9 @@ import { Theme } from '../../theme/Theme';
 const todayStr = () =>
   new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
 
-export default function SendTitaniumCardScreen({ route }) {
+export default function SendTitaniumCardScreen({ route, navigation }) {
   const p = route?.params || {};
-  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
+  const [form, setForm] = useState({ date: todayStr(), customerName: p.customerName || '', customerEmail: p.customerEmail || '', whatsapp: p.whatsapp || p.phone || '', cardNumber: '', validity: '', cardHolderName: p.customerName || '' });
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -33,12 +33,15 @@ export default function SendTitaniumCardScreen({ route }) {
         date: form.date.trim(),
         customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim(),
+        whatsapp: form.whatsapp.trim(),
         cardNumber: form.cardNumber.trim(),
         validity: form.validity.trim(),
         cardHolderName: form.cardHolderName.trim(),
       });
       const msg = res.data?.message || 'Titanium card sent.';
-      Alert.alert('Sent ✅', `${msg}\n\nThe PDF was emailed to ${form.customerEmail.trim()}.`);
+      Alert.alert('Sent ✅', `${msg}\n\nThe PDF was emailed to ${form.customerEmail.trim()}.`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
       setForm((p) => ({ ...p, customerName: '', customerEmail: '' }));
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || 'Could not send the titanium card.');
@@ -75,6 +78,11 @@ export default function SendTitaniumCardScreen({ route }) {
         <View onLayout={(e) => { fieldY.current.customerEmail = e.nativeEvent.layout.y; }}>
           <Text style={styles.fieldLabel}>Customer Email * (where PDF is delivered)</Text>
           <TextInput style={styles.input} value={form.customerEmail} onChangeText={(v) => setF('customerEmail', v)} onFocus={() => onFieldFocus('customerEmail')} keyboardType="email-address" autoCapitalize="none" placeholder="client@example.com" placeholderTextColor={Theme.colors.textSecondary} />
+        </View>
+
+        <View onLayout={(e) => { fieldY.current.whatsapp = e.nativeEvent.layout.y; }}>
+          <Text style={styles.fieldLabel}>WhatsApp Number (PDF also sent on WhatsApp)</Text>
+          <TextInput style={styles.input} value={form.whatsapp} onChangeText={(v) => setF('whatsapp', v)} onFocus={() => onFieldFocus('whatsapp')} keyboardType="phone-pad" placeholder="e.g. 919876543210" placeholderTextColor={Theme.colors.textSecondary} />
         </View>
 
         <Text style={styles.sectionLabel}>Card Details</Text>

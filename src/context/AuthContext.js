@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '../api';
+import { authApi, setUnauthorizedHandler } from '../api';
 import { stopBackgroundTracking } from '../services/locationTracking';
 import { registerForPush, unregisterPush } from '../services/notifications';
 
@@ -17,7 +17,17 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Force logout without hitting the backend (the session is already dead —
+  // e.g. the account was deactivated). Used by the 401 interceptor.
+  const forceLogout = async () => {
+    try { await stopBackgroundTracking(); } catch (e) {}
+    try { await AsyncStorage.removeItem('token'); } catch (e) {}
+    setUser(null);
+  };
+
   useEffect(() => {
+    // Any 401 (expired token or a deactivated account) drops the user to Login.
+    setUnauthorizedHandler(() => { forceLogout(); });
     checkToken();
   }, []);
 

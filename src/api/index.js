@@ -18,6 +18,24 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// When any request comes back 401 — an expired token OR an account that was
+// deactivated (the auth middleware rejects inactive users on EVERY request) —
+// drop the stored token and tell the app to return to the login screen, so a
+// user who's already logged in is kicked out the moment they're deactivated.
+let onUnauthorized = null;
+export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    if (error?.response?.status === 401) {
+      try { await AsyncStorage.removeItem('token'); } catch (e) {}
+      if (onUnauthorized) { try { onUnauthorized(); } catch (e) {} }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const authApi = {
   login: (credentials) => api.post('/auth/login', credentials),
   me: () => api.get('/auth/me'),
@@ -119,6 +137,8 @@ export const notificationsApi = {
   // Admin/HR: pending scheduled notifications + cancel.
   scheduled: () => api.get('/notifications/scheduled'),
   cancelScheduled: (id) => api.delete(`/notifications/scheduled/${id}`),
+  // Admin/HR: history of notifications this user has sent (newest first).
+  sent: () => api.get('/notifications/sent'),
 };
 
 export const chatApi = {
@@ -142,6 +162,11 @@ export const usersApi = {
   contacts: () => api.get('/users/contacts'),
   // Onboard a new employee (admin/manager/bdo/team_leader/hr).
   create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  // Admin team management:
+  setActive: (id, active) => api.post(`/users/${id}/set-active`, { active }),
+  remove: (id) => api.delete(`/users/${id}`),
+  changePassword: (id, newPassword) => api.post(`/users/${id}/admin-change-password`, { newPassword }),
 };
 
 export const hrDashboardApi = {
@@ -180,6 +205,14 @@ export const clientDocsApi = {
   // Generate + email a PDF to the client via Resend (no Word attachment).
   sendWelcome: (data) => api.post('/tapify-welcome/send', data),
   sendMembership: (data) => api.post('/membership/send', data),
+};
+
+export const whatsappApi = {
+  send: (data) => api.post('/whatsapp/send', data).then(r => r.data),
+  sendBulk: (data) => api.post('/whatsapp/bulk', data).then(r => r.data),
+  templates: () => api.get('/whatsapp/templates').then(r => r.data),
+  conversations: () => api.get('/whatsapp/conversations').then(r => r.data),
+  thread: (phone) => api.get('/whatsapp/thread/' + encodeURIComponent(phone)).then(r => r.data),
 };
 
 export const profileApi = {

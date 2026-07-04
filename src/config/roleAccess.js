@@ -48,6 +48,7 @@ export const DRAWER_DEFS = {
   SendMembership:      { title: 'Titanium Card',   icon: 'card-outline' },
   CloseDeal:           { title: 'Close a Deal',    icon: 'checkmark-done-circle-outline' },
   SendNotification:    { title: 'Notifications',   icon: 'notifications-outline' },
+  TeamManagement:      { title: 'Team Management',  icon: 'people-circle-outline' },
 };
 
 // ───── Role presets ─────
@@ -98,6 +99,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
+      'TeamManagement',
       'SendNotification', 'HRDashboard', 'TeamMap', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
       'PresentationHistory', 'ChatList',

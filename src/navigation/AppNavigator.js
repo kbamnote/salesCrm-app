@@ -1,5 +1,7 @@
-import React, { useRef, useState } from 'react';
-import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
@@ -33,6 +35,7 @@ import DesignsScreen from '../screens/main/DesignsScreen';
 import HRDashboardScreen from '../screens/main/HRDashboardScreen';
 import TelecallerDashboardScreen from '../screens/main/TelecallerDashboardScreen';
 import WhatsAppScreen from '../screens/main/WhatsAppScreen';
+import WhatsAppChatScreen from '../screens/main/WhatsAppChatScreen';
 import CallsScreen from '../screens/main/CallsScreen';
 import TeamMonitorScreen from '../screens/main/TeamMonitorScreen';
 import TeamMapScreen from '../screens/main/TeamMapScreen';
@@ -59,6 +62,7 @@ import PresentationFormScreen from '../screens/main/PresentationFormScreen';
 import PresentationRecordingScreen from '../screens/main/PresentationRecordingScreen';
 import AddClientScreen from '../screens/main/AddClientScreen';
 import ClientDetailScreen from '../screens/main/ClientDetailScreen';
+import TeamMembersScreen from '../screens/main/TeamMembersScreen';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -112,6 +116,7 @@ const DRAWER_COMPONENTS = {
   CloseDeal: CloseDealScreen,
   SendNotification: SendNotificationScreen,
   RouteHistory: RouteHistoryScreen,
+  TeamManagement: TeamMembersScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header
@@ -123,6 +128,7 @@ const HIDDEN_TAB_SCREENS = [
   'Login', 'AddLead', 'LeadDetail', 'ClientDetail',
   'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
   'PayrollEmployee', 'PayslipDetail', 'DealCompleted', 'SendWelcome', 'SendMembership',
+  'WhatsAppChat',
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
@@ -226,15 +232,119 @@ function HomeStack({ navigation: drawerNav }) {
   );
 }
 
-// Custom drawer content — adds bottom padding so the last item isn't hidden
-// behind the floating GlobalTabBar.
+// ADMIN-ONLY sidebar grouping. Each section is a collapsible dropdown that
+// holds the admin's EXISTING drawer items (nothing added/removed — only grouped).
+// Any admin drawer item not listed here falls through to the "General" section,
+// so future additions can't silently disappear.
+const ADMIN_DRAWER_SECTIONS = [
+  { key: 'sales',      title: 'Sales',      icon: 'briefcase-outline', items: ['TeamMap', 'RouteHistory', 'TeamProgress', 'Targets', 'PresentationHistory', 'Designs'] },
+  { key: 'telecaller', title: 'Telecaller', icon: 'headset-outline',   items: ['TelecallerDashboard', 'Calls', 'WhatsApp'] },
+  { key: 'hr',         title: 'HR',         icon: 'people-outline',     items: ['HRDashboard', 'Onboarding', 'TeamManagement', 'Payroll', 'OfferLetter', 'Agreement', 'SendNotification'] },
+  { key: 'general',    title: 'General',    icon: 'apps-outline',       items: ['ChatList', 'MyPayslips'] },
+];
+
+// Sectioned (dropdown) drawer — admin only.
+function SectionedAdminDrawer(props) {
+  const { state, navigation } = props;
+  const routeNames = state.routes.map((r) => r.name);      // actually-registered drawer routes
+  const focused = state.routes[state.index]?.name;         // index maps into routes, not routeNames
+  const present = new Set(routeNames);
+
+  // Build the visible sections from what's actually registered, then sweep any
+  // unassigned admin item into General so nothing is dropped.
+  const assigned = new Set(ADMIN_DRAWER_SECTIONS.flatMap((s) => s.items));
+  const sections = ADMIN_DRAWER_SECTIONS.map((s) => ({ ...s, items: s.items.filter((n) => present.has(n)) }));
+  const leftovers = routeNames.filter((n) => n !== 'Home' && !assigned.has(n));
+  if (leftovers.length) {
+    const gen = sections.find((s) => s.key === 'general');
+    if (gen) gen.items = [...gen.items, ...leftovers];
+  }
+
+  // Start with the section holding the current screen expanded; rest collapsed.
+  const [open, setOpen] = useState(() => {
+    const init = {};
+    sections.forEach((s) => { init[s.key] = s.items.includes(focused); });
+    return init;
+  });
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+  const go = (name) => navigation.navigate(name);
+
+  const homeActive = focused === 'Home';
+
+  return (
+    <DrawerContentScrollView {...props} contentContainerStyle={{ paddingBottom: 110 }}>
+      {/* Home */}
+      <TouchableOpacity style={[drawerStyles.row, homeActive && drawerStyles.rowActive]} onPress={() => go('Home')} activeOpacity={0.7}>
+        <Ionicons name="home-outline" size={22} color={homeActive ? Theme.colors.primary : Theme.colors.textSecondary} />
+        <Text style={[drawerStyles.label, homeActive && drawerStyles.labelActive]}>Home</Text>
+      </TouchableOpacity>
+
+      {sections.map((sec) => {
+        if (sec.items.length === 0) return null;
+        const isOpen = !!open[sec.key];
+        const sectionActive = sec.items.includes(focused);
+        return (
+          <View key={sec.key} style={drawerStyles.section}>
+            <TouchableOpacity style={drawerStyles.sectionHeader} onPress={() => toggle(sec.key)} activeOpacity={0.7}>
+              <Ionicons name={sec.icon} size={18} color={sectionActive ? Theme.colors.primary : Theme.colors.text} />
+              <Text style={[drawerStyles.sectionTitle, sectionActive && { color: Theme.colors.primary }]}>{sec.title}</Text>
+              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={Theme.colors.textSecondary} />
+            </TouchableOpacity>
+
+            {isOpen && sec.items.map((name) => {
+              const def = DRAWER_DEFS[name] || {};
+              const active = focused === name;
+              const title = name === 'MyPayslips' ? 'Salary Spend' : (def.title || name);
+              return (
+                <TouchableOpacity
+                  key={name}
+                  style={[drawerStyles.row, drawerStyles.rowNested, active && drawerStyles.rowActive]}
+                  onPress={() => go(name)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name={def.icon || 'ellipse-outline'} size={20} color={active ? Theme.colors.primary : Theme.colors.textSecondary} />
+                  <Text style={[drawerStyles.label, active && drawerStyles.labelActive]}>{title}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+      })}
+    </DrawerContentScrollView>
+  );
+}
+
+// Custom drawer content — admin gets the sectioned dropdown sidebar; every other
+// role keeps the default flat list. Bottom padding clears the floating tab bar.
 function DrawerContent(props) {
+  const { user } = useAuth();
+  if (user?.role === 'admin') return <SectionedAdminDrawer {...props} />;
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={{ paddingBottom: 110 }}>
       <DrawerItemList {...props} />
     </DrawerContentScrollView>
   );
 }
+
+const drawerStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 16, marginHorizontal: 8, borderRadius: 8,
+  },
+  rowNested: { paddingLeft: 26, marginVertical: 1 },
+  rowActive: { backgroundColor: Theme.colors.primary + '15' },
+  label: { fontFamily: Theme.typography.fontFamily, fontSize: 15, color: Theme.colors.textSecondary, fontWeight: '500' },
+  labelActive: { color: Theme.colors.primary, fontWeight: '700' },
+  section: { marginTop: 4 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 16, marginHorizontal: 4,
+  },
+  sectionTitle: {
+    flex: 1, fontFamily: Theme.typography.fontFamily, fontSize: 12, fontWeight: '800',
+    color: Theme.colors.text, textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+});
 
 function DrawerNavigator() {
   const { user } = useAuth();
@@ -322,6 +432,28 @@ export default function AppNavigator() {
     }
   };
 
+  // Tapping a chat notification opens that specific conversation (like WhatsApp).
+  useEffect(() => {
+    const openChat = async (response) => {
+      const data = response?.notification?.request?.content?.data || {};
+      if (data.type !== 'chat' || !data.chatId) return;
+      const id = response?.notification?.request?.identifier || '';
+      const last = await AsyncStorage.getItem('handledChatNotif').catch(() => null);
+      if (id && id === last) return;            // don't reopen on a later cold start
+      if (id) AsyncStorage.setItem('handledChatNotif', id).catch(() => {});
+      const go = () => {
+        try {
+          navigationRef.current?.navigate('ChatRoom', { chatId: data.chatId, chatName: data.chatName });
+        } catch (_) { /* nav not ready / not logged in */ }
+      };
+      if (navigationRef.current?.isReady?.()) go();
+      else setTimeout(go, 900);                 // cold start: wait for the navigator
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener(openChat);
+    Notifications.getLastNotificationResponseAsync().then((r) => { if (r) openChat(r); }).catch(() => {});
+    return () => sub.remove();
+  }, []);
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Theme.colors.background }}>
@@ -345,6 +477,7 @@ export default function AppNavigator() {
               <Stack.Screen name="PresentationRecording" component={PresentationRecordingScreen} options={{ headerShown: true, title: 'Recording', ...headerStyle }} />
               <Stack.Screen name="ChatRoom"              component={ChatRoomScreen}              options={({ route }) => ({ headerShown: true, title: route.params?.chatName || 'Chat', ...headerStyle })} />
               <Stack.Screen name="NewChat"               component={NewChatScreen}               options={{ headerShown: true, title: 'New Chat', ...headerStyle }} />
+              <Stack.Screen name="WhatsAppChat"          component={WhatsAppChatScreen}          options={({ route }) => ({ headerShown: true, title: route.params?.name || route.params?.phone || 'WhatsApp', ...headerStyle, headerStyle: { backgroundColor: '#25D366', elevation: 0, shadowOpacity: 0, borderBottomWidth: 0 } })} />
               <Stack.Screen name="CloseDeal"             component={CloseDealScreen}             options={{ headerShown: true, title: 'Close a Deal', ...headerStyle }} />
               <Stack.Screen name="DealCompleted"         component={DealCompletedScreen}         options={{ headerShown: true, title: 'Deal Completed', ...headerStyle }} />
               <Stack.Screen name="SendWelcome"           component={SendWelcomeLetterScreen}     options={{ headerShown: true, title: 'Welcome Letter', ...headerStyle }} />

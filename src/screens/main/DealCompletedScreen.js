@@ -12,7 +12,7 @@ const INR = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN');
 export default function DealCompletedScreen({ route, navigation }) {
   // Payment is collected on the wizard's payment step; this screen only handles
   // the post-deal actions (Tapify card + documents).
-  const { client, amount } = route.params || {};
+  const { client, amount, meetingId } = route.params || {};
 
   // ── Tapify card ──
   const [card, setCard] = useState({
@@ -35,6 +35,7 @@ export default function DealCompletedScreen({ route, navigation }) {
     try {
       const res = await tapifyCardApi.create({
         clientId: client?._id,
+        meetingId,
         name: card.name.trim(),
         email: card.email.trim(),
         password: card.password.trim(),

@@ -18,6 +18,8 @@ const connectListeners = new Set(); // callbacks fired when (re)connected
 const chatListeners = new Set();    // callbacks for `chat:message`
 const chatReadListeners = new Set(); // callbacks for `chat:read`
 const chatGroupListeners = new Set(); // callbacks for `chat:group` (renamed / members changed / deleted)
+const waIncomingListeners = new Set(); // callbacks for `whatsapp:incoming`
+const waSentListeners = new Set();     // callbacks for `whatsapp:sent`
 
 async function connect() {
   if (socket && socket.connected) return socket;
@@ -50,6 +52,12 @@ async function connect() {
     });
     socket.on('chat:group', (data) => {
       chatGroupListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('whatsapp:incoming', (doc) => {
+      waIncomingListeners.forEach((cb) => { try { cb(doc); } catch (_) {} });
+    });
+    socket.on('whatsapp:sent', (doc) => {
+      waSentListeners.forEach((cb) => { try { cb(doc); } catch (_) {} });
     });
     socket.on('connect_error', (e) => console.log('[Socket] connect_error:', e.message));
   } else {
@@ -118,7 +126,20 @@ function onGroup(cb) {
   return () => chatGroupListeners.delete(cb);
 }
 
+// Subscribe to inbound WhatsApp messages (`whatsapp:incoming`). Returns an unsubscribe fn.
+function onWhatsappIncoming(cb) {
+  waIncomingListeners.add(cb);
+  return () => waIncomingListeners.delete(cb);
+}
+
+// Subscribe to outbound WhatsApp messages we sent (`whatsapp:sent`). Returns an unsubscribe fn.
+function onWhatsappSent(cb) {
+  waSentListeners.add(cb);
+  return () => waSentListeners.delete(cb);
+}
+
 export default {
   connect, disconnect, isConnected, emitLocation,
   onLive, onConnect, onChat, onChatRead, onGroup,
+  onWhatsappIncoming, onWhatsappSent,
 };

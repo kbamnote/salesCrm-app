@@ -13,6 +13,7 @@ const todayStr = () =>
 const FIELDS = [
   { key: 'customerName', label: 'Customer Name', kb: 'default' },
   { key: 'customerEmail', label: 'Customer Email * (where PDF is delivered)', kb: 'email-address' },
+  { key: 'whatsapp', label: 'WhatsApp Number (PDF also sent on WhatsApp)', kb: 'phone-pad' },
   { key: 'businessName', label: 'Business Name', kb: 'default' },
   { key: 'url', label: 'URL', kb: 'default' },
   { key: 'userId', label: 'Login Email / User ID (printed in PDF)', kb: 'email-address' },
@@ -20,12 +21,13 @@ const FIELDS = [
   { key: 'website', label: 'Website', kb: 'default' },
 ];
 
-export default function SendWelcomeLetterScreen({ route }) {
+export default function SendWelcomeLetterScreen({ route, navigation }) {
   const p = route?.params || {};
   const [form, setForm] = useState({
     date: todayStr(),
     customerName: p.customerName || '',
     customerEmail: p.customerEmail || '',
+    whatsapp: p.whatsapp || p.phone || '',
     businessName: p.businessName || '',
     url: p.url || '',
     userId: '',
@@ -53,6 +55,7 @@ export default function SendWelcomeLetterScreen({ route }) {
         date: form.date.trim(),
         customerEmail: form.customerEmail.trim(),
         customerName: form.customerName.trim(),
+        whatsapp: form.whatsapp.trim(),
         businessName: form.businessName.trim(),
         url: form.url.trim(),
         userId: form.userId.trim(),
@@ -60,8 +63,10 @@ export default function SendWelcomeLetterScreen({ route }) {
         website: form.website.trim(),
       });
       const msg = res.data?.message || 'Welcome letter sent.';
-      Alert.alert('Sent ✅', `${msg}\n\nThe PDF was emailed to ${form.customerEmail.trim()}.`);
-      setForm((p) => ({ ...p, customerName: '', customerEmail: '', businessName: '', url: '', userId: '', password: '', website: '' }));
+      Alert.alert('Sent ✅', `${msg}\n\nThe PDF was emailed to ${form.customerEmail.trim()}.`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+      setForm((p) => ({ ...p, customerName: '', customerEmail: '', whatsapp: '', businessName: '', url: '', userId: '', password: '', website: '' }));
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || 'Could not send the welcome letter.');
     } finally {
@@ -98,7 +103,7 @@ export default function SendWelcomeLetterScreen({ route }) {
               onChangeText={(v) => setF(f.key, v)}
               onFocus={() => onFieldFocus(f.key)}
               keyboardType={f.kb}
-              autoCapitalize={f.key === 'customerEmail' || f.key === 'url' || f.key === 'website' || f.key === 'userId' || f.key === 'password' ? 'none' : 'sentences'}
+              autoCapitalize={f.key === 'customerEmail' || f.key === 'whatsapp' || f.key === 'url' || f.key === 'website' || f.key === 'userId' || f.key === 'password' ? 'none' : 'sentences'}
               placeholder={f.label.replace(' *', '')}
               placeholderTextColor={Theme.colors.textSecondary}
             />

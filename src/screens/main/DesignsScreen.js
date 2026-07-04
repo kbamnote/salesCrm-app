@@ -41,6 +41,13 @@ export default function DesignsScreen() {
   const [title, setTitle] = useState('');
   const [uploading, setUploading] = useState(false);
 
+  // Photos / Videos tabs + reel-post modal state.
+  const [tab, setTab] = useState('photos');
+  const [reelOpen, setReelOpen] = useState(false);
+  const [reelUrl, setReelUrl] = useState('');
+  const [reelTitle, setReelTitle] = useState('');
+  const [posting, setPosting] = useState(false);
+
   const load = async () => {
     try {
       const res = await designsApi.list();
@@ -179,40 +186,121 @@ export default function DesignsScreen() {
     </View>
   );
 
+  // Split into the two tabs.
+  const photos = designs.filter((d) => d.type !== 'video');
+  const videos = designs.filter((d) => d.type === 'video');
+  const isAdmin = user?.role === 'admin';
+
+  const openReel = (item) => { if (item.reelUrl) Linking.openURL(item.reelUrl).catch(() => {}); };
+  const shareReel = async (item) => {
+    try { await Share.share({ message: `${item.title}\n${item.reelUrl}`, url: item.reelUrl }); } catch (_) {}
+  };
+
+  const closeReel = () => { if (posting) return; setReelOpen(false); setReelUrl(''); setReelTitle(''); };
+  const submitReel = async () => {
+    const url = reelUrl.trim();
+    if (!reelTitle.trim() || !url) return;
+    if (!/instagram\.com/i.test(url)) {
+      return Alert.alert('Invalid link', 'Please paste a valid Instagram reel link.');
+    }
+    setPosting(true);
+    try {
+      await designsApi.create({ type: 'video', title: reelTitle.trim(), reelUrl: url });
+      setReelOpen(false); setReelUrl(''); setReelTitle('');
+      await load();
+      Alert.alert('Reel posted ✅', 'Everyone was notified to like, comment & share it.');
+    } catch (e) {
+      Alert.alert('Failed', e.response?.data?.error || 'Could not post the reel.');
+    } finally { setPosting(false); }
+  };
+
+  const renderReel = ({ item }) => (
+    <View style={styles.reelCard}>
+      <TouchableOpacity style={styles.reelThumb} activeOpacity={0.9} onPress={() => openReel(item)}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.reelThumbImg} resizeMode="cover" />
+        ) : (
+          <View style={styles.reelThumbEmpty}><Ionicons name="logo-instagram" size={30} color="#fff" /></View>
+        )}
+        <View style={styles.playBadge}><Ionicons name="play" size={20} color="#fff" /></View>
+      </TouchableOpacity>
+      <View style={styles.reelBody}>
+        <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+        {item.uploaderName ? <Text style={styles.meta}>by {item.uploaderName}</Text> : null}
+        <View style={styles.reelActions}>
+          <TouchableOpacity style={styles.reelWatchBtn} onPress={() => openReel(item)}>
+            <Ionicons name="logo-instagram" size={16} color="#fff" />
+            <Text style={styles.shareText}>Watch &amp; Like</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.reelShareBtn} onPress={() => shareReel(item)}>
+            <Ionicons name="share-social-outline" size={18} color={Theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+      {canDelete(item) && (
+        <TouchableOpacity style={styles.delBtn} onPress={() => confirmDelete(item)} disabled={deletingId === item._id}>
+          {deletingId === item._id ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={15} color="#fff" />}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={Theme.colors.primary} /></View>;
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: Theme.colors.surface }}>
+      {/* Photos / Videos tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity style={[styles.tab, tab === 'photos' && styles.tabActive]} onPress={() => setTab('photos')}>
+          <Ionicons name="images-outline" size={16} color={tab === 'photos' ? Theme.colors.primary : Theme.colors.textSecondary} />
+          <Text style={[styles.tabText, tab === 'photos' && styles.tabTextActive]}>Photos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, tab === 'videos' && styles.tabActive]} onPress={() => setTab('videos')}>
+          <Ionicons name="videocam-outline" size={16} color={tab === 'videos' ? Theme.colors.primary : Theme.colors.textSecondary} />
+          <Text style={[styles.tabText, tab === 'videos' && styles.tabTextActive]}>Videos</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
+        key={tab}
         style={styles.container}
-        data={designs}
+        data={tab === 'photos' ? photos : videos}
         keyExtractor={(item, i) => item._id || String(i)}
-        renderItem={renderItem}
-        numColumns={2}
-        columnWrapperStyle={{ paddingHorizontal: 8 }}
+        renderItem={tab === 'photos' ? renderItem : renderReel}
+        numColumns={tab === 'photos' ? 2 : 1}
+        columnWrapperStyle={tab === 'photos' ? { paddingHorizontal: 8 } : undefined}
         contentContainerStyle={{ paddingVertical: 12, paddingBottom: 140 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Theme.colors.primary} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="images-outline" size={52} color={Theme.colors.border} />
-            <Text style={styles.emptyTitle}>No designs yet</Text>
+            <Ionicons name={tab === 'photos' ? 'images-outline' : 'logo-instagram'} size={52} color={Theme.colors.border} />
+            <Text style={styles.emptyTitle}>{tab === 'photos' ? 'No designs yet' : 'No reels yet'}</Text>
             <Text style={styles.emptyText}>
-              {canUpload
-                ? 'Tap the + button to upload your first design.'
-                : 'Designs uploaded by the design team will appear here.'}
+              {tab === 'photos'
+                ? (canUpload ? 'Tap the + button to upload your first design.' : 'Designs uploaded by the design team will appear here.')
+                : (isAdmin ? 'Tap the + button to paste an Instagram reel.' : 'Reels shared by admin appear here — like, comment & share them!')}
             </Text>
           </View>
         }
       />
 
-      {/* Upload FAB — only for roles the backend permits to create designs. */}
-      {canUpload && (
+      {/* FAB — Photos: upload image (designer/admin/manager). Videos: post reel (admin only). */}
+      {tab === 'photos' && canUpload && (
         <TouchableOpacity
           style={[styles.fab, { bottom: insets.bottom + 76 }]}
           activeOpacity={0.85}
           onPress={() => setUploadOpen(true)}
+        >
+          <Ionicons name="add" size={30} color="#fff" />
+        </TouchableOpacity>
+      )}
+      {tab === 'videos' && isAdmin && (
+        <TouchableOpacity
+          style={[styles.fab, { bottom: insets.bottom + 76 }]}
+          activeOpacity={0.85}
+          onPress={() => setReelOpen(true)}
         >
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
@@ -265,6 +353,56 @@ export default function DesignsScreen() {
                 <>
                   <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
                   <Text style={styles.uploadText}>Upload</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Post-reel modal (admin only) */}
+      <Modal visible={reelOpen} transparent animationType="slide" onRequestClose={closeReel}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Post Instagram Reel</Text>
+              <TouchableOpacity onPress={closeReel} disabled={posting}>
+                <Ionicons name="close" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Reel title"
+              placeholderTextColor={Theme.colors.textSecondary}
+              value={reelTitle}
+              onChangeText={setReelTitle}
+              editable={!posting}
+            />
+            <TextInput
+              style={[styles.input, { marginTop: 10 }]}
+              placeholder="Paste Instagram reel link"
+              placeholderTextColor={Theme.colors.textSecondary}
+              value={reelUrl}
+              onChangeText={setReelUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              editable={!posting}
+            />
+            <Text style={styles.reelHint}>Everyone will be notified to like, comment &amp; share this reel.</Text>
+
+            <TouchableOpacity
+              style={[styles.uploadBtn, (!reelTitle.trim() || !reelUrl.trim() || posting) && styles.uploadBtnDisabled]}
+              onPress={submitReel}
+              disabled={!reelTitle.trim() || !reelUrl.trim() || posting}
+            >
+              {posting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="logo-instagram" size={18} color="#fff" />
+                  <Text style={styles.uploadText}>Post Reel &amp; Notify</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -373,4 +511,23 @@ const styles = StyleSheet.create({
   },
   uploadBtnDisabled: { opacity: 0.5 },
   uploadText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  // Tabs
+  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: Theme.colors.primary },
+  tabText: { fontFamily: Theme.typography.fontFamily, fontSize: 14, fontWeight: '700', color: Theme.colors.textSecondary },
+  tabTextActive: { color: Theme.colors.primary },
+
+  // Reel (video) card
+  reelCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: Theme.borderRadius.l, marginHorizontal: 12, marginBottom: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+  reelThumb: { width: 96, minHeight: 118, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  reelThumbImg: { width: 96, height: '100%' },
+  reelThumbEmpty: { width: 96, height: '100%', minHeight: 118, alignItems: 'center', justifyContent: 'center', backgroundColor: '#C13584' },
+  playBadge: { position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  reelBody: { flex: 1, padding: 12 },
+  reelActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  reelWatchBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#C13584', borderRadius: Theme.borderRadius.m, paddingVertical: 9 },
+  reelShareBtn: { width: 42, height: 38, borderRadius: Theme.borderRadius.m, borderWidth: 1, borderColor: Theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  reelHint: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 10, lineHeight: 16 },
 });

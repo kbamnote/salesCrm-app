@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useContext, createContext } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, Image, Platform, KeyboardAvoidingView,
+  ActivityIndicator, Alert, Image, Platform, KeyboardAvoidingView, Keyboard, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { dealsApi } from '../../api';
 import { uploadToCloudinary } from '../../services/cloudinary';
 import { Theme } from '../../theme/Theme';
@@ -32,9 +33,48 @@ const PAY_MODES = [
   { key: 'pdc', label: 'PDC', icon: 'document-outline' },
 ];
 
+// Lets each Field scroll itself above the keyboard when focused — long forms
+// (Basic/Business) would otherwise hide the lower inputs behind the keyboard.
+const FieldScrollContext = createContext(null);
+
 export default function CloseDealScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const scrollRef = useRef(null);
+  const scrollYRef = useRef(0);
+  const { height: winH } = useWindowDimensions();
   const [step, setStep] = useState(1);
+
+  // Extra scroll room appears ONLY while the keyboard is open (so there's no
+  // permanent empty gap at the bottom). Sized to the actual keyboard height.
+  const [kbPad, setKbPad] = useState(0);
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => setKbPad(e?.endCoordinates?.height || 0));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKbPad(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
+  // Scroll a just-focused field above the keyboard. Uses measure() (absolute
+  // window coords) instead of measureLayout — so no "ref to a native component"
+  // warning — and only scrolls when the field is actually behind the keyboard.
+  const scrollFieldIntoView = (inputEl) => {
+    const scroll = scrollRef.current;
+    if (!scroll || !inputEl || typeof inputEl.measure !== 'function') return;
+    setTimeout(() => {
+      inputEl.measure((x, y, w, h, pageX, pageY) => {
+        if (pageY == null || !scroll.scrollTo) return;
+        const kb = (Keyboard.metrics && Keyboard.metrics()?.height) || 0;
+        const visibleBottom = winH - kb - 72; // keep clear of the footer bar
+        const fieldBottom = pageY + h;
+        if (fieldBottom > visibleBottom - 8) {
+          const delta = fieldBottom - visibleBottom + 24;
+          scroll.scrollTo({ y: Math.max(0, scrollYRef.current + delta), animated: true });
+        }
+      });
+    }, 120);
+  };
   const [submitting, setSubmitting] = useState(false);
 
   // Idempotency: create the deal + record the payment at most once, even if the
@@ -73,6 +113,35 @@ export default function CloseDealScreen({ navigation }) {
   const dec = (k) => setQty((p) => ({ ...p, [k]: Math.max(0, (p[k] || 0) - 1) }));
   const toggle = (list, setList, s) =>
     setList(list.includes(s) ? list.filter((x) => x !== s) : [...list, s]);
+
+  // Standee: the number of selectable social media is capped by the QR count
+  // (2 QR → up to 2, 3 QR → up to 3). Lowering the QR count trims any extras.
+  const setStandeeQrCount = (n) => {
+    setStandeeQr(n);
+    setStandeeSocials((prev) => prev.slice(0, Number(n)));
+  };
+  const toggleStandeeSocial = (s) => {
+    const max = Number(standeeQr) || 0;
+    if (!standeeSocials.includes(s) && standeeSocials.length >= max) {
+      Alert.alert('Limit reached', `With ${max} QR you can pick up to ${max} social media.`);
+      return;
+    }
+    toggle(standeeSocials, setStandeeSocials, s);
+  };
+
+  // Sticker: selectable social media is capped by the chosen quantity
+  // (2 stickers → up to 2, etc.). Reducing the quantity trims any extras.
+  const toggleStickerSocial = (s) => {
+    const max = qty.sticker || 0;
+    if (!stickerSocials.includes(s) && stickerSocials.length >= max) {
+      Alert.alert('Limit reached', `With ${max} sticker${max === 1 ? '' : 's'} you can pick up to ${max} social media.`);
+      return;
+    }
+    toggle(stickerSocials, setStickerSocials, s);
+  };
+  useEffect(() => {
+    setStickerSocials((prev) => (prev.length > (qty.sticker || 0) ? prev.slice(0, qty.sticker || 0) : prev));
+  }, [qty.sticker]);
 
   // Page 4 — payment
   const [pay, setPay] = useState({ mode: 'cash', dealAmount: '', collectNow: '', ref: '', pdcImageUrl: '' });
@@ -116,10 +185,38 @@ export default function CloseDealScreen({ navigation }) {
 
   const next = () => {
     if (!validateStep()) return;
+    // Moving Basic → Business: carry over the fields that are the same, only
+    // filling ones the rep hasn't already typed on the Business page.
+    if (step === 1) {
+      setBiz((p) => ({
+        ...p,
+        businessName: p.businessName || basic.companyName,
+        contactPerson: p.contactPerson || basic.ownerName,
+        businessPhone: p.businessPhone || basic.contactNo,
+        whatsapp: p.whatsapp || basic.whatsapp,
+        email: p.email || basic.email,
+      }));
+    }
     if (step < 4) setStep(step + 1);
     else submit();
   };
-  const back = () => (step > 1 ? setStep(step - 1) : navigation.goBack());
+  const back = () => {
+    if (step > 1) { setStep(step - 1); return; }
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('Root');
+  };
+
+  // Always show a header back arrow: it steps back through the wizard and
+  // reliably exits the flow from the first page.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity onPress={back} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ paddingRight: 14 }}>
+          <Ionicons name="chevron-back" size={26} color={Theme.colors.white} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, step]);
 
   const submit = async () => {
     setSubmitting(true);
@@ -195,7 +292,12 @@ export default function CloseDealScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <FieldScrollContext.Provider value={scrollFieldIntoView}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+    >
       {/* Step progress */}
       <View style={styles.progress}>
         {STEPS.map((label, i) => {
@@ -216,7 +318,14 @@ export default function CloseDealScreen({ navigation }) {
         })}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 + kbPad }}
+        keyboardShouldPersistTaps="handled"
+        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+      >
         {step === 1 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Basic Information</Text>
@@ -290,7 +399,7 @@ export default function CloseDealScreen({ navigation }) {
                     <Text style={styles.optionLabel}>QR count</Text>
                     <View style={styles.segRow}>
                       {['2', '3'].map((n) => (
-                        <TouchableOpacity key={n} style={[styles.segBtn, standeeQr === n && styles.segBtnActive]} onPress={() => setStandeeQr(n)}>
+                        <TouchableOpacity key={n} style={[styles.segBtn, standeeQr === n && styles.segBtnActive]} onPress={() => setStandeeQrCount(n)}>
                           <Text style={[styles.segText, standeeQr === n && { color: '#fff' }]}>{n} QR</Text>
                         </TouchableOpacity>
                       ))}
@@ -299,15 +408,24 @@ export default function CloseDealScreen({ navigation }) {
                 )}
                 {c.socials && qty[c.key] > 0 && (
                   <View style={styles.optionBlock}>
-                    <Text style={styles.optionLabel}>Social media</Text>
+                    <Text style={styles.optionLabel}>
+                      Social media (up to {c.key === 'standee' ? Number(standeeQr) : (qty[c.key] || 0)})
+                    </Text>
                     <View style={styles.chipWrap}>
                       {SOCIALS.map((s) => {
-                        const list = c.key === 'standee' ? standeeSocials : stickerSocials;
-                        const setList = c.key === 'standee' ? setStandeeSocials : setStickerSocials;
+                        const isStandee = c.key === 'standee';
+                        const list = isStandee ? standeeSocials : stickerSocials;
+                        const cap = isStandee ? Number(standeeQr) : (qty[c.key] || 0);
                         const on = list.includes(s);
+                        const atLimit = !on && list.length >= cap;
                         return (
-                          <TouchableOpacity key={s} style={[styles.chip, on && styles.chipOn]} onPress={() => toggle(list, setList, s)}>
-                            <Text style={[styles.chipText, on && { color: '#fff' }]}>{s}</Text>
+                          <TouchableOpacity
+                            key={s}
+                            style={[styles.chip, on && styles.chipOn, atLimit && styles.chipDisabled]}
+                            disabled={atLimit}
+                            onPress={() => (isStandee ? toggleStandeeSocial(s) : toggleStickerSocial(s))}
+                          >
+                            <Text style={[styles.chipText, on && { color: '#fff' }, atLimit && styles.chipTextDisabled]}>{s}</Text>
                           </TouchableOpacity>
                         );
                       })}
@@ -412,17 +530,23 @@ export default function CloseDealScreen({ navigation }) {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </FieldScrollContext.Provider>
   );
 }
 
 function Field({ label, value, onChange, keyboardType, autoCap, multiline }) {
+  const scrollFieldIntoView = useContext(FieldScrollContext);
+  const inputRef = useRef(null);
+
   return (
     <View style={{ marginBottom: 4 }}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        ref={inputRef}
         style={[styles.input, multiline && styles.textarea]}
         value={value}
         onChangeText={onChange}
+        onFocus={() => scrollFieldIntoView && scrollFieldIntoView(inputRef.current)}
         keyboardType={keyboardType || 'default'}
         autoCapitalize={autoCap || 'sentences'}
         placeholder={label.replace(' *', '')}
@@ -485,7 +609,9 @@ const styles = StyleSheet.create({
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Theme.colors.border, backgroundColor: '#fff' },
   chipOn: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
+  chipDisabled: { backgroundColor: '#F1F5F9', borderColor: Theme.colors.border, opacity: 0.5 },
   chipText: { fontFamily: Theme.typography.fontFamily, fontSize: 12, fontWeight: '600', color: Theme.colors.text },
+  chipTextDisabled: { color: Theme.colors.textSecondary },
 
   divider: { height: 1, backgroundColor: Theme.colors.border, marginVertical: 14 },
   flagRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, gap: 10 },

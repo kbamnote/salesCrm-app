@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { leadsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
+import WhatsAppComposeModal from '../../components/WhatsAppComposeModal';
 
 const STATUS_COLORS = {
   new: { bg: '#DBEAFE', text: '#1E3A8A', dot: '#3B82F6' },
@@ -23,6 +24,7 @@ export default function LeadDetailScreen({ route, navigation }) {
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const loadLead = async () => {
     try {
@@ -140,7 +142,7 @@ export default function LeadDetailScreen({ route, navigation }) {
             <Ionicons name="call" size={22} color={Theme.colors.success} />
             <Text style={[styles.actionLabel, { color: Theme.colors.success }]}>Call</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleWhatsApp}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setComposeOpen(true)}>
             <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
             <Text style={[styles.actionLabel, { color: '#25D366' }]}>WhatsApp</Text>
           </TouchableOpacity>
@@ -236,6 +238,12 @@ export default function LeadDetailScreen({ route, navigation }) {
         <Ionicons name="trash-outline" size={20} color={Theme.colors.error} />
         <Text style={styles.deleteBtnText}>Delete Lead</Text>
       </TouchableOpacity>
+
+      <WhatsAppComposeModal
+        visible={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        recipient={{ phone: lead.phone, name: lead.name, entity: 'lead', entityId: lead._id }}
+      />
     </ScrollView>
   );
 }

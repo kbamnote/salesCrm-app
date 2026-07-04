@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch, Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -31,10 +31,35 @@ export default function SendNotificationScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [scheduledList, setScheduledList] = useState([]);
 
+  // Sent history (which notifications we've already sent) + copy feedback.
+  const [sentList, setSentList] = useState([]);
+  const [loadingSent, setLoadingSent] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+
   const loadScheduled = () => {
     notificationsApi.scheduled().then((r) => setScheduledList(r.data || [])).catch(() => {});
   };
-  useEffect(() => { loadScheduled(); }, []);
+  const loadSent = () => {
+    setLoadingSent(true);
+    notificationsApi.sent()
+      .then((r) => setSentList(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoadingSent(false));
+  };
+  useEffect(() => { loadScheduled(); loadSent(); }, []);
+
+  const copyNotification = async (item) => {
+    // Interim: open the OS share sheet (which includes a "Copy" action) so this
+    // works without any extra native module. TODO: once `expo-clipboard` is
+    // installed, swap this for Clipboard.setStringAsync(...) for one-tap copy.
+    try {
+      await Share.share({ message: `${item.title}\n\n${item.msg}` });
+      setCopiedId(item._id);
+      setTimeout(() => setCopiedId((c) => (c === item._id ? null : c)), 1500);
+    } catch (e) {
+      Alert.alert('Error', 'Could not share the notification.');
+    }
+  };
 
   const onDateChange = (e, d) => {
     setShowDatePicker(false);
@@ -115,6 +140,7 @@ export default function SendNotificationScreen() {
       setSelectedUser(null);
       setSearch('');
       if (scheduleOn) loadScheduled();
+      else loadSent();
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to send notification.');
     } finally {
@@ -314,6 +340,54 @@ export default function SendNotificationScreen() {
             ))}
           </View>
         )}
+
+        {/* Sent history — which notifications we've already sent, with copy */}
+        <View style={[styles.card, { marginTop: 14 }]}>
+          <View style={styles.histHeader}>
+            <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
+              Sent History{sentList.length > 0 ? ` (${sentList.length})` : ''}
+            </Text>
+            <TouchableOpacity onPress={loadSent} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="refresh" size={18} color={Theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {loadingSent && sentList.length === 0 ? (
+            <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 12 }} />
+          ) : sentList.length === 0 ? (
+            <Text style={styles.emptyText}>No notifications sent yet.</Text>
+          ) : (
+            sentList.map((n) => (
+              <View key={n._id} style={styles.histItem}>
+                <View style={styles.histIcon}>
+                  <Ionicons
+                    name={n.to === 'all' ? 'megaphone-outline' : 'person-outline'}
+                    size={16}
+                    color={Theme.colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.histTitle} numberOfLines={1}>{n.title}</Text>
+                  {n.msg ? <Text style={styles.histMsg} numberOfLines={2}>{n.msg}</Text> : null}
+                  <Text style={styles.histMeta} numberOfLines={1}>
+                    {n.to === 'all' ? 'All users' : (n.toName || 'Individual')} · {fmtWhen(n.createdAt)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => copyNotification(n)}
+                  style={styles.copyBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={copiedId === n._id ? 'checkmark' : 'copy-outline'}
+                    size={18}
+                    color={copiedId === n._id ? '#10B981' : Theme.colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -397,4 +471,13 @@ const styles = StyleSheet.create({
   schedItemTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
   schedItemMeta: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 2 },
   cancelBtn: { padding: 4 },
+
+  // Sent history
+  histHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  histItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  histIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: Theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  histTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
+  histMsg: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2, lineHeight: 17 },
+  histMeta: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, marginTop: 4 },
+  copyBtn: { padding: 6, marginTop: 2 },
 });
