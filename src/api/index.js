@@ -110,6 +110,13 @@ export const offerLetterApi = {
   generate: (data) => api.post('/offer-letter', data), // returns { filename, base64 }
 };
 
+// New Clients — digital-card onboarding requests captured over WhatsApp (admin/HR).
+export const newClientsApi = {
+  list: (params) => api.get('/new-clients', { params }),
+  update: (id, data) => api.patch(`/new-clients/${id}`, data),
+  remove: (id) => api.delete(`/new-clients/${id}`),
+};
+
 export const agreementApi = {
   designations: () => api.get('/agreement/designations'),
   generate: (data) => api.post('/agreement', data), // returns { filename, base64 }

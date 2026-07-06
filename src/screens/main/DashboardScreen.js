@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, 
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { targetsApi, leadsApi, clientsApi, dealsApi, attendanceApi } from '../../api';
 import { can } from '../../config/roleAccess';
+import DemoRequestsCard from '../../components/DemoRequestsCard';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -184,6 +185,13 @@ export default function DashboardScreen() {
             <Ionicons name="checkmark-circle" size={22} color="#fff" />
             <Text style={styles.closeDealText}>Close a Deal</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Demo requests from WhatsApp — admin only */}
+        {user?.role === 'admin' && (
+          <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+            <DemoRequestsCard />
+          </View>
         )}
 
         {/* Target Progress Card — hidden for admin (they see Team Targets instead) */}

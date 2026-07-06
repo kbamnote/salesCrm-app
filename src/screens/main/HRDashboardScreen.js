@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { hrDashboardApi } from '../../api';
+import DemoRequestsCard from '../../components/DemoRequestsCard';
 import { Theme } from '../../theme/Theme';
 
 const { width: SW } = Dimensions.get('window');
@@ -99,6 +100,9 @@ export default function HRDashboardScreen() {
         <StatCard icon="pulse" color="#3B82F6" label="Working Now" value={todaySummary.working} />
         <StatCard icon="close-circle" color="#EF4444" label="Absent Today" value={todaySummary.absent} />
       </View>
+
+      {/* Demo requests from WhatsApp */}
+      <DemoRequestsCard />
 
       {/* 7-day attendance trend chart */}
       <View style={styles.card}>

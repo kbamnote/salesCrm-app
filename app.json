@@ -3,7 +3,7 @@
     "name": "Tapify Sales Crm",
     "slug": "salestapify",
     "scheme": "tapifysalescrm",
-    "version": "1.0.33",
+    "version": "1.0.34",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
@@ -41,7 +41,7 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 67,
+      "versionCode": 69,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {

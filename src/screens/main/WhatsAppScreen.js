@@ -1,13 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { whatsappApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 import SocketService from '../../services/location/SocketService';
 
 const WA_GREEN = '#25D366';
+
+// Inbox filters by the ice-breaker request type tagged on each conversation.
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'card', label: '🚀 Card' },
+  { key: 'demo', label: '📅 Demo' },
+  { key: 'support', label: '🛟 Support' },
+];
 
 // Normalize different API response shapes: array, {conversations:[...]}, {data:[...]}
 const extractConversations = (data) => {
@@ -39,6 +46,7 @@ export default function WhatsAppScreen({ navigation }) {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState('all'); // all | card | demo | support
 
   const load = useCallback(async () => {
     try {
@@ -133,17 +141,26 @@ export default function WhatsAppScreen({ navigation }) {
     );
   };
 
+  const filtered = filter === 'all' ? conversations : conversations.filter((c) => c.requestType === filter);
+  const countFor = (key) => (key === 'all' ? conversations.length : conversations.filter((c) => c.requestType === key).length);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.menuBtn}>
-          <Ionicons name="menu-outline" size={26} color={Theme.colors.white} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-          <Text style={styles.headerTitle}>WhatsApp</Text>
-        </View>
-        <View style={styles.menuBtn} />
+    <View style={styles.container}>
+      {/* Filter chips */}
+      <View style={styles.filterBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <TouchableOpacity key={f.key} style={[styles.chip, active && styles.chipActive]} onPress={() => setFilter(f.key)} activeOpacity={0.7}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+                <View style={[styles.chipCount, active && styles.chipCountActive]}>
+                  <Text style={[styles.chipCountText, active && styles.chipCountTextActive]}>{countFor(f.key)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {loading && conversations.length === 0 ? (
@@ -152,7 +169,7 @@ export default function WhatsAppScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={filtered}
           keyExtractor={(item) => String(item.phone || item._id)}
           renderItem={renderConversation}
           contentContainerStyle={styles.listContent}
@@ -164,38 +181,43 @@ export default function WhatsAppScreen({ navigation }) {
                 <View style={styles.emptyIconWrap}>
                   <Ionicons name="logo-whatsapp" size={48} color={WA_GREEN} />
                 </View>
-                <Text style={styles.emptyTitle}>No conversations yet</Text>
+                <Text style={styles.emptyTitle}>
+                  {filter === 'all' ? 'No conversations yet' : 'None in this filter'}
+                </Text>
                 <Text style={styles.emptyText}>
-                  Messages you send from a lead or client, and replies from customers, will appear here.
+                  {filter === 'all'
+                    ? 'Messages you send from a lead or client, and replies from customers, will appear here.'
+                    : 'No conversations match this category yet.'}
                 </Text>
               </View>
             )
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.surface },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    backgroundColor: WA_GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+
+  // Filter chips
+  filterBar: { backgroundColor: Theme.colors.white, borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+    borderWidth: 1, borderColor: Theme.colors.border, backgroundColor: '#fff',
   },
-  headerTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: {
-    color: Theme.colors.white,
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: Theme.typography.fontFamily,
-  },
-  menuBtn: { width: 40, alignItems: 'center' },
+  chipActive: { backgroundColor: WA_GREEN, borderColor: WA_GREEN },
+  chipText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
+  chipTextActive: { color: '#fff' },
+  chipCount: { minWidth: 18, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 9, backgroundColor: '#EEF2F6', alignItems: 'center' },
+  chipCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  chipCountText: { fontFamily: Theme.typography.fontFamily, fontSize: 11, fontWeight: '800', color: Theme.colors.textSecondary },
+  chipCountTextActive: { color: '#fff' },
+
   listContent: { paddingBottom: 110, flexGrow: 1 },
   separator: { height: 1, backgroundColor: Theme.colors.border, marginLeft: 78 },
   card: {

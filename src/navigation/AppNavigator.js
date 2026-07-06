@@ -54,6 +54,8 @@ import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
 import DealCompletedScreen from '../screens/main/DealCompletedScreen';
 import SendNotificationScreen from '../screens/main/SendNotificationScreen';
 import RouteHistoryScreen from '../screens/main/RouteHistoryScreen';
+import NewClientsScreen from '../screens/main/NewClientsScreen';
+import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -116,6 +118,8 @@ const DRAWER_COMPONENTS = {
   CloseDeal: CloseDealScreen,
   SendNotification: SendNotificationScreen,
   RouteHistory: RouteHistoryScreen,
+  NewClients: NewClientsScreen,
+  Support: SupportRequestsScreen,
   TeamManagement: TeamMembersScreen,
 };
 
