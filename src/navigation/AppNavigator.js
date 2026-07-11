@@ -56,6 +56,7 @@ import SendNotificationScreen from '../screens/main/SendNotificationScreen';
 import RouteHistoryScreen from '../screens/main/RouteHistoryScreen';
 import NewClientsScreen from '../screens/main/NewClientsScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
+import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -120,6 +121,7 @@ const DRAWER_COMPONENTS = {
   RouteHistory: RouteHistoryScreen,
   NewClients: NewClientsScreen,
   Support: SupportRequestsScreen,
+  SalesPresentation: SalesPresentationScreen,
   TeamManagement: TeamMembersScreen,
 };
 

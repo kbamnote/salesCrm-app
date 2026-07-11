@@ -11,15 +11,34 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       Alert.alert('Error', 'Please enter both email and password.');
       return;
     }
     setLoading(true);
     try {
-      await login(email, password);
+      // Trim the email — mobile keyboards often add a trailing space / capital.
+      await login(email.trim(), password);
     } catch (e) {
-      Alert.alert('Login Failed', e.response?.data?.error || 'Invalid credentials');
+      // Show the REAL reason. Previously ANY failure (a network drop, a timeout,
+      // a rate-limit) fell back to "Invalid credentials", which made connectivity
+      // issues look like a wrong password.
+      let msg;
+      if (e.response) {
+        const serverMsg = e.response.data?.error || e.response.data?.message;
+        if (e.response.status === 429) {
+          msg = serverMsg || 'Too many attempts. Please wait a few minutes and try again.';
+        } else if (e.response.status === 401) {
+          msg = serverMsg || 'Incorrect email or password.';
+        } else {
+          msg = serverMsg || `Something went wrong (error ${e.response.status}). Please try again.`;
+        }
+      } else if (e.code === 'ECONNABORTED') {
+        msg = 'Login timed out — your connection seems slow. Please try again.';
+      } else {
+        msg = 'Could not reach the server. Check your internet connection and try again.';
+      }
+      Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);
     }

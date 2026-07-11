@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'https://sales-crm-backend-production.up.railway.app/api';
+export const API_URL = 'https://sales-crm-backend-production-0187.up.railway.app/api';
 // Socket.IO connects to the server origin (without the /api suffix).
 export const SOCKET_URL = API_URL.replace(/\/api\/?$/, '');
 
@@ -108,6 +108,14 @@ export const designsApi = {
 export const offerLetterApi = {
   designations: () => api.get('/offer-letter/designations'),
   generate: (data) => api.post('/offer-letter', data), // returns { filename, base64 }
+};
+
+// Sales presentation decks — admin/HR upload a PDF and assign it to sales staff.
+export const salesDecksApi = {
+  list: () => api.get('/sales-decks'),
+  create: (data) => api.post('/sales-decks', data),
+  update: (id, data) => api.put(`/sales-decks/${id}`, data),
+  remove: (id) => api.delete(`/sales-decks/${id}`),
 };
 
 // New Clients — digital-card onboarding requests captured over WhatsApp (admin/HR).
