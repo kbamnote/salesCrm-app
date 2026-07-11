@@ -41,7 +41,7 @@
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 73,
+      "versionCode": 74,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
