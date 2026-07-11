@@ -3,7 +3,7 @@
     "name": "Tapify Sales Crm",
     "slug": "salestapify",
     "scheme": "tapifysalescrm",
-    "version": "1.0.34",
+    "version": "1.0.36",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
