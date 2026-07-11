@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { attendanceApi, locationsApi } from '../../api';
-import { startBackgroundTracking, stopBackgroundTracking } from '../../services/locationTracking';
+import { startBackgroundTracking, stopBackgroundTracking, ensureForegroundPermission } from '../../services/locationTracking';
 import BackgroundLocationDisclosure from '../../components/BackgroundLocationDisclosure';
 
 const BG_CONSENT_KEY = 'bgLocationConsent'; // 'accepted' | 'declined'
@@ -42,9 +42,10 @@ export default function AttendanceScreen() {
   }, []);
 
   const requestLocationPermission = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    setLocationGranted(status === 'granted');
-    if (status !== 'granted') {
+    // Shows the prominent disclosure BEFORE the OS permission prompt (Play policy).
+    const res = await ensureForegroundPermission();
+    setLocationGranted(res.granted);
+    if (!res.granted) {
       Alert.alert(
         'Location Required',
         'Attendance requires location access to verify your position.',

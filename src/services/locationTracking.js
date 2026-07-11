@@ -15,12 +15,39 @@
  * Tracking lifetime is still gated by attendance: it starts on punch-in and
  * stops on punch-out / logout (unchanged behaviour).
  */
+import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 // Importing this registers the OS background task at startup (side effect).
 import { LOCATION_TASK_NAME } from './location/backgroundTask';
 import TrackingManager from './location/TrackingManager';
 
 export { LOCATION_TASK_NAME };
+
+/**
+ * Google Play "Prominent Disclosure and Consent" requirement: before requesting
+ * location (especially BACKGROUND location), we must show an in-app disclosure
+ * that states what we collect, that it's collected in the background, the purpose,
+ * and get affirmative consent — immediately before the OS permission prompt.
+ * Resolves true only if the user taps "Allow".
+ */
+function showLocationDisclosure() {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Location access',
+      'Tapify collects your location — including in the background, while the app is ' +
+        'closed or not in use — to share your live location and route with your managers ' +
+        'for attendance and field-visit tracking.\n\n' +
+        'This happens only during your working hours, after you punch in for attendance, ' +
+        'and stops when you punch out.\n\n' +
+        'Do you allow Tapify to collect this location data?',
+      [
+        { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Allow', onPress: () => resolve(true) },
+      ],
+      { cancelable: false }
+    );
+  });
+}
 
 export async function isTracking() {
   try {
@@ -35,17 +62,43 @@ export async function isTracking() {
  * Returns { granted, reason? } where reason ∈ 'foreground-denied' | 'background-denied'.
  */
 export async function ensureBackgroundPermission({ prompt = true } = {}) {
-  const fg = prompt
-    ? await Location.requestForegroundPermissionsAsync()
-    : await Location.getForegroundPermissionsAsync();
+  // Check current status first — if it's already granted, no OS prompt will show,
+  // so we must NOT nag the user with the disclosure again.
+  const fgCurrent = await Location.getForegroundPermissionsAsync();
+  const bgCurrent = await Location.getBackgroundPermissionsAsync();
+  const alreadyGranted = fgCurrent.status === 'granted' && bgCurrent.status === 'granted';
+
+  // Prominent disclosure MUST precede the runtime permission request (Google Play).
+  if (prompt && !alreadyGranted) {
+    const consented = await showLocationDisclosure();
+    if (!consented) return { granted: false, reason: 'disclosure-declined' };
+  }
+
+  const fg = prompt ? await Location.requestForegroundPermissionsAsync() : fgCurrent;
   if (fg.status !== 'granted') return { granted: false, reason: 'foreground-denied' };
 
-  const bg = prompt
-    ? await Location.requestBackgroundPermissionsAsync()
-    : await Location.getBackgroundPermissionsAsync();
+  const bg = prompt ? await Location.requestBackgroundPermissionsAsync() : bgCurrent;
   if (bg.status !== 'granted') return { granted: false, reason: 'background-denied' };
 
   return { granted: true };
+}
+
+/**
+ * Ensure FOREGROUND location permission, showing the prominent disclosure first
+ * (Google Play requires the disclosure immediately before the runtime prompt).
+ * Use this everywhere the app asks for location (attendance, field visits,
+ * presentations) so no permission request is ever unpreceded by a disclosure.
+ * Returns { granted, reason? }.
+ */
+export async function ensureForegroundPermission() {
+  const cur = await Location.getForegroundPermissionsAsync();
+  if (cur.status === 'granted') return { granted: true };
+
+  const consented = await showLocationDisclosure();
+  if (!consented) return { granted: false, reason: 'disclosure-declined' };
+
+  const fg = await Location.requestForegroundPermissionsAsync();
+  return fg.status === 'granted' ? { granted: true } : { granted: false, reason: 'foreground-denied' };
 }
 
 /**

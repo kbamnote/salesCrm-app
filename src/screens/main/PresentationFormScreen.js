@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
+import { ensureForegroundPermission } from '../../services/locationTracking';
 
 export default function PresentationFormScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -28,8 +29,9 @@ export default function PresentationFormScreen({ navigation }) {
   const getLocation = async () => {
     setFetchingLocation(true);
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      // Prominent disclosure precedes the OS permission prompt (Google Play).
+      const res = await ensureForegroundPermission();
+      if (!res.granted) {
         Alert.alert('Permission Denied', 'Permission to access location was denied');
         setFetchingLocation(false);
         return;

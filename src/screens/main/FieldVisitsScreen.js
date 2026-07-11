@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { fieldVisitsApi, clientsApi } from '../../api';
+import { ensureForegroundPermission } from '../../services/locationTracking';
 import { Theme } from '../../theme/Theme';
 
 export default function FieldVisitsScreen() {
@@ -27,13 +28,15 @@ export default function FieldVisitsScreen() {
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
 
-  useEffect(() => {
-    requestPermission();
-  }, []);
+  // Location permission is requested (with the disclosure) when the user opens
+  // the "log visit" modal — not on mount — so the disclosure isn't shown until
+  // the feature is actually used.
 
   const requestPermission = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    setLocationGranted(status === 'granted');
+    // Prominent disclosure precedes the OS prompt (Google Play policy).
+    const res = await ensureForegroundPermission();
+    setLocationGranted(res.granted);
+    return res.granted;
   };
 
   const loadData = async () => {
@@ -62,6 +65,9 @@ export default function FieldVisitsScreen() {
     setSelectedClient(null);
     setCurrentCoords(null);
     try {
+      // Disclosure + permission must precede any location read.
+      const ok = locationGranted || (await requestPermission());
+      if (!ok) { setFetchingLocation(false); return; }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setCurrentCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch (e) {
