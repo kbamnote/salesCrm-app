@@ -75,6 +75,8 @@ export const attendanceApi = {
   byDate: (date) => api.get('/attendance', { params: { date } }),
   // Full roster with present/absent status for a day (absentees included).
   roster: (date) => api.get('/attendance/roster', { params: date ? { date } : {} }),
+  // Admin/HR: every submitted daily report for a date (default today).
+  reports: (date) => api.get('/attendance/reports', { params: date ? { date } : {} }),
 };
 
 export const fieldVisitsApi = {
@@ -234,6 +236,24 @@ export const profileApi = {
   me: () => api.get('/profile/me'),
   update: (data) => api.put('/profile/me', data), // { user: {...}, profile: {...} }
   uploadPhoto: (photo) => api.post('/profile/me/photo', { photo }), // photo = url or base64
+};
+
+export const appConfigApi = {
+  // Public: latest app version + Play Store link, for the update prompt.
+  get: () => api.get('/public/app-config'),
+};
+
+export const leavesApi = {
+  // Apply for leave. data: { leaveType, fromDate, toDate, reason }
+  apply: (data) => api.post('/leaves', data),
+  // Own leave history (any role).
+  my: () => api.get('/leaves/my'),
+  // Withdraw a still-pending request of your own.
+  cancel: (id) => api.post(`/leaves/${id}/cancel`),
+  // Admin/HR: every request in the company. params: { status? }
+  list: (params) => api.get('/leaves', { params }),
+  approve: (id) => api.post(`/leaves/${id}/approve`),
+  reject: (id, note) => api.post(`/leaves/${id}/reject`, { note }),
 };
 
 export default api;

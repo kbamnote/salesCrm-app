@@ -30,6 +30,8 @@ export const DRAWER_DEFS = {
   OfferLetter:         { title: 'Appointment Letter', icon: 'document-text-outline' },
   Agreement:           { title: 'Agreement',       icon: 'reader-outline' },
   Attendance:          { title: 'My Attendance',   icon: 'calendar-outline' },
+  Leave:               { title: 'Leave',           icon: 'airplane-outline' },
+  DailyReports:        { title: 'Daily Reports',   icon: 'document-text-outline' },
   FieldVisits:         { title: 'Field Visits',    icon: 'map-outline' },
   Designs:             { title: 'Designs',         icon: 'images-outline' },
   ChatList:            { title: 'Team Chat',       icon: 'chatbubbles-outline' },
@@ -59,7 +61,7 @@ export const DRAWER_DEFS = {
 // Field reps — the original/unchanged experience.
 const fieldRep = {
   tabs: ['Dashboard', 'Leads', 'Clients', 'Profile'],
-  drawer: ['SalesPresentation', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['SalesPresentation', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
@@ -67,7 +69,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['SalesPresentation', 'TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['SalesPresentation', 'TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -80,7 +82,7 @@ export const ROLE_CONFIG = {
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
     tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
-    drawer: ['Attendance', 'Designs', 'ChatList', 'MyPayslips'],
+    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
@@ -88,7 +90,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['NewClients', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['NewClients', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -103,8 +105,8 @@ export const ROLE_CONFIG = {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
       'TeamManagement', 'NewClients', 'Support', 'SalesPresentation',
-      'SendNotification', 'HRDashboard', 'TeamMap', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
-      'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement',
+      'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
+      'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'PresentationHistory', 'ChatList',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
@@ -118,7 +120,7 @@ export const ROLE_CONFIG = {
   // Designer — mainly uses the web panel; minimal app.
   designer: {
     tabs: ['Designs', 'Profile'],
-    drawer: ['ChatList', 'MyPayslips'],
+    drawer: ['Leave', 'ChatList', 'MyPayslips'],
     landing: 'Designs',
     can: {},
   },

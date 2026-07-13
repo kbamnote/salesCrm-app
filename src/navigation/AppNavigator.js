@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Theme } from '../theme/Theme';
 import LocationReporter from '../components/LocationReporter';
+import UpdateChecker from '../components/UpdateChecker';
 import { getRoleConfig, TAB_DEFS, DRAWER_DEFS } from '../config/roleAccess';
 
 // Auth
@@ -54,6 +55,8 @@ import SendTitaniumCardScreen from '../screens/main/SendTitaniumCardScreen';
 import DealCompletedScreen from '../screens/main/DealCompletedScreen';
 import SendNotificationScreen from '../screens/main/SendNotificationScreen';
 import RouteHistoryScreen from '../screens/main/RouteHistoryScreen';
+import LeaveScreen from '../screens/main/LeaveScreen';
+import DailyReportsScreen from '../screens/main/DailyReportsScreen';
 import NewClientsScreen from '../screens/main/NewClientsScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
@@ -119,6 +122,8 @@ const DRAWER_COMPONENTS = {
   CloseDeal: CloseDealScreen,
   SendNotification: SendNotificationScreen,
   RouteHistory: RouteHistoryScreen,
+  Leave: LeaveScreen,
+  DailyReports: DailyReportsScreen,
   NewClients: NewClientsScreen,
   Support: SupportRequestsScreen,
   SalesPresentation: SalesPresentationScreen,
@@ -502,6 +507,9 @@ export default function AppNavigator() {
 
         {/* Headless: reports location every 5 min while punched in (renders nothing) */}
         {user && <LocationReporter />}
+
+        {/* Prompts to update when a newer Play Store version is available */}
+        <UpdateChecker />
       </NavigationContainer>
     </View>
   );

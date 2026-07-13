@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Platform
+  RefreshControl, ActivityIndicator, Alert, Platform,
+  Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,13 @@ export default function AttendanceScreen() {
   const [, setTick] = useState(0);
   const [showDisclosure, setShowDisclosure] = useState(false);
   const bgConsentRef = useRef(null); // 'accepted' | 'declined' | null
+
+  // Mandatory daily report — collected before the punch-out camera step.
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSummary, setReportSummary] = useState('');
+  const [reportTasks, setReportTasks] = useState('');
+  const [reportPlan, setReportPlan] = useState('');
+  const pendingReportRef = useRef(null); // holds the submitted report until punch-out completes
 
   useEffect(() => {
     AsyncStorage.getItem(BG_CONSENT_KEY).then((v) => { bgConsentRef.current = v; });
@@ -148,6 +156,28 @@ export default function AttendanceScreen() {
     handlePunchClick('in');
   };
 
+  // Punch-out requires a daily report first — open that modal instead of the
+  // camera directly. The camera/location step only runs after it's submitted.
+  const onPunchOutPress = () => {
+    setReportSummary('');
+    setReportTasks('');
+    setReportPlan('');
+    setReportModalOpen(true);
+  };
+
+  const submitReport = () => {
+    if (!reportSummary.trim()) {
+      return Alert.alert('Report required', 'Please describe what you worked on today before punching out.');
+    }
+    pendingReportRef.current = {
+      summary: reportSummary.trim(),
+      tasksCompleted: reportTasks.trim(),
+      plan: reportPlan.trim(),
+    };
+    setReportModalOpen(false);
+    handlePunchClick('out');
+  };
+
   const handleCapture = async () => {
     if (!cameraRef) return;
     
@@ -205,7 +235,9 @@ export default function AttendanceScreen() {
         }
         Alert.alert('✅ Punched In!', `Location & selfie captured at ${new Date().toLocaleTimeString()}`);
       } else {
-        await attendanceApi.punchOut(payload);
+        // Attach the mandatory daily report captured before the camera step.
+        await attendanceApi.punchOut({ ...payload, report: pendingReportRef.current });
+        pendingReportRef.current = null;
         // Stop tracking and mark them offline on the admin map once the shift ends.
         await stopBackgroundTracking();
         locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'offline' })
@@ -341,7 +373,7 @@ export default function AttendanceScreen() {
             {isPunchedIn && (
               <TouchableOpacity
                 style={[styles.punchBtn, styles.punchOutBtn]}
-                onPress={() => handlePunchClick('out')}
+                onPress={onPunchOutPress}
                 disabled={punchingOut}
               >
                 {punchingOut ? (
@@ -406,6 +438,59 @@ export default function AttendanceScreen() {
       onAccept={acceptDisclosure}
       onDecline={declineDisclosure}
     />
+
+    {/* Mandatory daily report — shown before punch-out */}
+    <Modal visible={reportModalOpen} animationType="slide" transparent onRequestClose={() => setReportModalOpen(false)}>
+      <KeyboardAvoidingView style={styles.reportOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.reportSheet}>
+          <View style={styles.reportHeader}>
+            <View>
+              <Text style={styles.reportTitle}>Daily Report</Text>
+              <Text style={styles.reportSubtitle}>Required to punch out</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReportModalOpen(false)}>
+              <Ionicons name="close" size={24} color={Theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 28 }} keyboardShouldPersistTaps="handled">
+            <Text style={styles.reportLabel}>What did you work on today? *</Text>
+            <TextInput
+              style={[styles.reportInput, { height: 100, textAlignVertical: 'top' }]}
+              value={reportSummary}
+              onChangeText={setReportSummary}
+              multiline
+              placeholder="Summary of your work today…"
+              placeholderTextColor={Theme.colors.textSecondary}
+            />
+
+            <Text style={styles.reportLabel}>Key tasks / visits / deals (optional)</Text>
+            <TextInput
+              style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
+              value={reportTasks}
+              onChangeText={setReportTasks}
+              multiline
+              placeholder="e.g. 3 client visits, closed 1 deal…"
+              placeholderTextColor={Theme.colors.textSecondary}
+            />
+
+            <Text style={styles.reportLabel}>Plan for tomorrow (optional)</Text>
+            <TextInput
+              style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
+              value={reportPlan}
+              onChangeText={setReportPlan}
+              multiline
+              placeholder="What you plan to do next…"
+              placeholderTextColor={Theme.colors.textSecondary}
+            />
+
+            <TouchableOpacity style={styles.reportSubmit} onPress={submitReport}>
+              <Ionicons name="exit-outline" size={18} color="#fff" />
+              <Text style={styles.reportSubmitText}>Submit & Continue Punch Out</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
     </>
   );
 }
@@ -642,4 +727,22 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     backgroundColor: '#fff',
   },
+  reportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  reportSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%' },
+  reportHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 18, borderBottomWidth: 1, borderBottomColor: Theme.colors.border,
+  },
+  reportTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 18, fontWeight: '800', color: Theme.colors.text },
+  reportSubtitle: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.error, marginTop: 2, fontWeight: '600' },
+  reportLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+  reportInput: {
+    backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border,
+    paddingHorizontal: 14, paddingVertical: 12, fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.text,
+  },
+  reportSubmit: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Theme.colors.error, borderRadius: 12, paddingVertical: 14, marginTop: 22,
+  },
+  reportSubmitText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '700', color: '#fff' },
 });
