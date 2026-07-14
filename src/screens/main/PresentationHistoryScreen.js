@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Theme } from '../../theme/Theme';
 import { presentationService } from '../../services/presentationService';
+import { salesDecksApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
 export default function PresentationHistoryScreen({ navigation }) {
   const [presentations, setPresentations] = useState([]);
+  const [decks, setDecks] = useState([]); // presentations assigned by admin/HR
   const [loading, setLoading] = useState(true);
   const [sound, setSound] = useState(null);
   const [playingId, setPlayingId] = useState(null);
@@ -66,8 +68,12 @@ export default function PresentationHistoryScreen({ navigation }) {
   const fetchPresentations = async () => {
     setLoading(true);
     try {
-      const data = await presentationService.getPresentations();
+      const [data, decksRes] = await Promise.all([
+        presentationService.getPresentations(),
+        salesDecksApi.list().catch(() => ({ data: [] })),
+      ]);
       setPresentations(data);
+      setDecks(decksRes.data || []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -136,6 +142,11 @@ export default function PresentationHistoryScreen({ navigation }) {
   );
 
   const renderHeader = () => {
+    // Presentations assigned by admin/HR (SalesDecks) + any legacy per-user PPTs.
+    const assignedMaterials = [
+      ...decks.map((d) => ({ key: `deck-${d._id}`, title: d.title, url: d.fileUrl })),
+      ...(user?.ppts || []).map((p) => ({ key: `ppt-${p._id}`, title: p.title, url: p.url })),
+    ];
     return (
       <View style={styles.pptContainer}>
         {pendingCount > 0 && (
@@ -155,21 +166,22 @@ export default function PresentationHistoryScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
-        <Text style={styles.sectionTitle}>Assigned Materials (PPTs)</Text>
-        {(!user?.ppts || user.ppts.length === 0) ? (
+        <Text style={styles.sectionTitle}>Assigned Presentations</Text>
+        {assignedMaterials.length === 0 ? (
           <Text style={{ color: Theme.colors.textSecondary || '#666', marginBottom: 12 }}>
-            No PPTs assigned yet. (User: {user?.name || 'Unknown'})
+            No presentations assigned yet.
           </Text>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-            {user.ppts.map((ppt) => (
-              <TouchableOpacity 
-                key={ppt._id} 
+            {assignedMaterials.map((m) => (
+              <TouchableOpacity
+                key={m.key}
                 style={styles.pptCard}
-                onPress={() => Linking.openURL(ppt.url)}
+                onPress={() => (m.url ? Linking.openURL(m.url).catch(() => Alert.alert('Could not open', 'The presentation link seems invalid.')) : null)}
               >
                 <Ionicons name="document-text" size={32} color={Theme.colors.primary} style={{ marginBottom: 8 }} />
-                <Text style={styles.pptTitle} numberOfLines={2}>{ppt.title}</Text>
+                <Text style={styles.pptTitle} numberOfLines={2}>{m.title}</Text>
+                <Ionicons name="open-outline" size={14} color={Theme.colors.textSecondary} style={{ marginTop: 6 }} />
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -183,17 +195,18 @@ export default function PresentationHistoryScreen({ navigation }) {
     <View style={styles.container}>
       {loading ? (
         <ActivityIndicator size="large" color={Theme.colors.primary} style={styles.loader} />
-      ) : presentations.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="mic-outline" size={64} color={Theme.colors.border || '#ccc'} />
-          <Text style={styles.emptyText}>No presentations recorded yet.</Text>
-        </View>
       ) : (
         <FlatList
           data={presentations}
           keyExtractor={(item) => item.id || item._id?.toString() || Math.random().toString()}
           renderItem={renderItem}
           ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            <View style={styles.emptyRecordings}>
+              <Ionicons name="mic-outline" size={48} color={Theme.colors.border || '#ccc'} />
+              <Text style={styles.emptyText}>No presentations recorded yet.</Text>
+            </View>
+          }
           contentContainerStyle={styles.listContainer}
         />
       )}
@@ -322,6 +335,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyRecordings: {
+    alignItems: 'center',
+    paddingVertical: 30,
   },
   emptyText: {
     marginTop: 16,

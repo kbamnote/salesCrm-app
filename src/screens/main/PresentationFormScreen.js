@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../../theme/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { ensureForegroundPermission } from '../../services/locationTracking';
+import { salesDecksApi } from '../../api';
 
 export default function PresentationFormScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -18,13 +19,27 @@ export default function PresentationFormScreen({ navigation }) {
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [selfieUri, setSelfieUri] = useState(null);
   const { user } = useAuth();
-  
-  // Auto-select the first PPT if available
-  const [selectedPptUrl, setSelectedPptUrl] = useState(user?.ppts?.[0]?.url || null);
+
+  // Materials that can be presented: admin/HR-assigned decks + any legacy per-user PPTs.
+  const [materials, setMaterials] = useState([]);
+  const [selectedPptUrl, setSelectedPptUrl] = useState(null);
 
   useEffect(() => {
     getLocation();
+    loadMaterials();
   }, []);
+
+  const loadMaterials = async () => {
+    const local = (user?.ppts || []).map((p) => ({ id: `ppt-${p._id}`, title: p.title, url: p.url }));
+    let decks = [];
+    try {
+      const res = await salesDecksApi.list();
+      decks = (res.data || []).map((d) => ({ id: `deck-${d._id}`, title: d.title, url: d.fileUrl }));
+    } catch (_) { /* assigned decks are optional */ }
+    const merged = [...decks, ...local].filter((m) => m.url);
+    setMaterials(merged);
+    if (merged.length > 0) setSelectedPptUrl((prev) => prev || merged[0].url);
+  };
 
   const getLocation = async () => {
     setFetchingLocation(true);
@@ -151,20 +166,20 @@ export default function PresentationFormScreen({ navigation }) {
         />
       </View>
 
-      {user?.ppts && user.ppts.length > 0 && (
+      {materials.length > 0 && (
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Select Material to Present</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {user.ppts.map((ppt) => {
-              const isSelected = selectedPptUrl === ppt.url;
+            {materials.map((mat) => {
+              const isSelected = selectedPptUrl === mat.url;
               return (
                 <TouchableOpacity
-                  key={ppt._id}
+                  key={mat.id}
                   style={[
                     styles.pptSelectorCard,
                     isSelected && styles.pptSelectorCardActive
                   ]}
-                  onPress={() => setSelectedPptUrl(ppt.url)}
+                  onPress={() => setSelectedPptUrl(mat.url)}
                   activeOpacity={0.8}
                 >
                   {/* Checkmark badge in top-right corner when selected */}
@@ -183,7 +198,7 @@ export default function PresentationFormScreen({ navigation }) {
                     styles.pptTitle,
                     isSelected && { color: Theme.colors.white, fontWeight: '700' }
                   ]} numberOfLines={2}>
-                    {ppt.title}
+                    {mat.title}
                   </Text>
                 </TouchableOpacity>
               );
@@ -196,7 +211,7 @@ export default function PresentationFormScreen({ navigation }) {
               <Ionicons name="checkmark-circle" size={18} color={Theme.colors.success} />
               <Text style={styles.selectedConfirmText}>
                 Selected: <Text style={{ fontWeight: '700' }}>
-                  {user.ppts.find(p => p.url === selectedPptUrl)?.title || 'Material'}
+                  {materials.find(m => m.url === selectedPptUrl)?.title || 'Material'}
                 </Text>
               </Text>
             </View>

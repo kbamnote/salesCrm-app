@@ -12,7 +12,6 @@ import { Theme } from '../../theme/Theme';
 
 const CLOUD_NAME = 'dpreeciaf';
 const UPLOAD_PRESET = 'salescrm_attendance';
-const SALES_ROLES = ['sales', 'tms', 'tme']; // who a deck can be assigned to
 
 // Upload a PDF to Cloudinary as a RAW file (raw delivery isn't subject to the
 // PDF-image restriction, so the link always opens).
@@ -82,8 +81,9 @@ export default function SalesPresentationScreen() {
     setOpen(true);
     if (reps.length === 0) {
       setRepsLoading(true);
+      // Any role can be assigned a presentation, not just the sales team.
       usersApi.contacts()
-        .then((r) => setReps((r.data || []).filter((u) => SALES_ROLES.includes(u.role))))
+        .then((r) => setReps(r.data || []))
         .catch(() => {})
         .finally(() => setRepsLoading(false));
     }
@@ -106,7 +106,7 @@ export default function SalesPresentationScreen() {
   const submit = async () => {
     if (!file) return Alert.alert('Choose a file', 'Please select a PDF to upload.');
     if (!title.trim()) return Alert.alert('Title', 'Please enter a title.');
-    if (!assignAll && selected.length === 0) return Alert.alert('Assign', 'Select at least one salesperson, or turn on "All sales team".');
+    if (!assignAll && selected.length === 0) return Alert.alert('Assign', 'Select at least one person, or turn on "Assign to everyone".');
     setSaving(true);
     try {
       const fileUrl = await uploadPdf(file);

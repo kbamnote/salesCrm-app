@@ -61,7 +61,7 @@ export const DRAWER_DEFS = {
 // Field reps — the original/unchanged experience.
 const fieldRep = {
   tabs: ['Dashboard', 'Leads', 'Clients', 'Profile'],
-  drawer: ['SalesPresentation', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
@@ -69,7 +69,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['SalesPresentation', 'TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
