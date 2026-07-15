@@ -58,6 +58,7 @@ import RouteHistoryScreen from '../screens/main/RouteHistoryScreen';
 import LeaveScreen from '../screens/main/LeaveScreen';
 import DailyReportsScreen from '../screens/main/DailyReportsScreen';
 import NewClientsScreen from '../screens/main/NewClientsScreen';
+import CampaignLeadsScreen from '../screens/main/CampaignLeadsScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
 
@@ -125,6 +126,7 @@ const DRAWER_COMPONENTS = {
   Leave: LeaveScreen,
   DailyReports: DailyReportsScreen,
   NewClients: NewClientsScreen,
+  CampaignLeads: CampaignLeadsScreen,
   Support: SupportRequestsScreen,
   SalesPresentation: SalesPresentationScreen,
   TeamManagement: TeamMembersScreen,

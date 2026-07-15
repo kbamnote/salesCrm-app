@@ -55,6 +55,10 @@ export const leadsApi = {
   update: (id, data) => api.put(`/leads/${id}`, data),
   // Assign to a salesperson/TMS (+ optional status); notifies the assignee.
   assign: (id, data) => api.post(`/leads/${id}/assign`, data),
+  // Admin/HR: leads captured from Facebook/Instagram Lead Ads.
+  campaign: (params) => api.get('/leads/campaign', { params }),
+  // Admin/HR: import a Facebook Lead Ads CSV export (raw file text).
+  importFbCsv: (csv) => api.post('/leads/import-fb-csv', { csv }),
 };
 
 export const targetsApi = {

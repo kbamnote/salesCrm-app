@@ -52,6 +52,7 @@ export const DRAWER_DEFS = {
   SendNotification:    { title: 'Notifications',   icon: 'notifications-outline' },
   TeamManagement:      { title: 'Team Management',  icon: 'people-circle-outline' },
   NewClients:          { title: 'New Clients',      icon: 'sparkles-outline' },
+  CampaignLeads:       { title: 'Campaign Leads',   icon: 'megaphone-outline' },
   Support:             { title: 'Support',          icon: 'help-buoy-outline' },
   SalesPresentation:   { title: 'Sales Presentation', icon: 'easel-outline' },
 };
@@ -90,7 +91,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['NewClients', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -104,7 +105,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
-      'TeamManagement', 'NewClients', 'Support', 'SalesPresentation',
+      'TeamManagement', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'PresentationHistory', 'ChatList',
