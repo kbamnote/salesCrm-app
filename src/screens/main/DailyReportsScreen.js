@@ -13,6 +13,70 @@ const toDateStr = (d) => d.toISOString().split('T')[0];
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
 
+// Structured report layouts (mirror the punch-out form).
+const FIELD_METRICS = [
+  { key: 'freshPresentation', label: 'Fresh Presentation Done' },
+  { key: 'followUpVisit', label: 'Follow up Visit' },
+  { key: 'appointmentAssigned', label: 'Appointment Assigned' },
+  { key: 'appointmentVisit', label: 'Appointment Visit' },
+  { key: 'dealClosed', label: 'Deal Closed' },
+];
+const CALLING_METRICS = [
+  { key: 'totalCalls', label: 'Total Calls Dialed' },
+  { key: 'callsConnected', label: 'Calls Connected' },
+  { key: 'sameDaySchedule', label: 'Same Day Schedule' },
+  { key: 'nextDaySchedule', label: 'Next Day Schedule' },
+  { key: 'otherDaySchedule', label: 'Other Day Schedule' },
+  { key: 'meetingDone', label: 'Meeting Done' },
+  { key: 'dealDone', label: 'Deal Done' },
+];
+
+// Renders a report by its type: structured field / calling metrics, or the
+// legacy free-text layout for older records.
+function renderReportBody(report) {
+  if (!report) return <Text style={styles.reportText}>—</Text>;
+
+  if (report.type === 'field' || report.type === 'calling') {
+    const metrics = report.type === 'calling' ? CALLING_METRICS : FIELD_METRICS;
+    return (
+      <>
+        {metrics.map((m) => (
+          <View key={m.key} style={styles.statRow}>
+            <Text style={styles.statLabel}>{m.label}</Text>
+            <Text style={styles.statValue}>{Number(report[m.key] || 0)}</Text>
+          </View>
+        ))}
+        {report.type === 'field' && report.workCategory ? (
+          <>
+            <Text style={styles.reportLabel}>Today's Work Category</Text>
+            <Text style={styles.reportText}>{report.workCategory}</Text>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  // Legacy free-text report.
+  return (
+    <>
+      <Text style={styles.reportLabel}>Work summary</Text>
+      <Text style={styles.reportText}>{report.summary || '—'}</Text>
+      {report.tasksCompleted ? (
+        <>
+          <Text style={styles.reportLabel}>Key tasks / visits / deals</Text>
+          <Text style={styles.reportText}>{report.tasksCompleted}</Text>
+        </>
+      ) : null}
+      {report.plan ? (
+        <>
+          <Text style={styles.reportLabel}>Plan for tomorrow</Text>
+          <Text style={styles.reportText}>{report.plan}</Text>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export default function DailyReportsScreen() {
   const [date, setDate] = useState(new Date());
   const [showDate, setShowDate] = useState(false);
@@ -59,24 +123,7 @@ export default function DailyReportsScreen() {
           </View>
         </View>
 
-        <View style={styles.reportBody}>
-          <Text style={styles.reportLabel}>Work summary</Text>
-          <Text style={styles.reportText}>{item.report?.summary || '—'}</Text>
-
-          {item.report?.tasksCompleted ? (
-            <>
-              <Text style={styles.reportLabel}>Key tasks / visits / deals</Text>
-              <Text style={styles.reportText}>{item.report.tasksCompleted}</Text>
-            </>
-          ) : null}
-
-          {item.report?.plan ? (
-            <>
-              <Text style={styles.reportLabel}>Plan for tomorrow</Text>
-              <Text style={styles.reportText}>{item.report.plan}</Text>
-            </>
-          ) : null}
-        </View>
+        <View style={styles.reportBody}>{renderReportBody(item.report)}</View>
       </View>
     );
   };
@@ -144,6 +191,12 @@ const styles = StyleSheet.create({
   reportBody: { marginTop: 10, borderTopWidth: 1, borderTopColor: '#EEF1F5', paddingTop: 10 },
   reportLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 8 },
   reportText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, color: Theme.colors.text, marginTop: 4, lineHeight: 19 },
+  statRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F4F6F9',
+  },
+  statLabel: { flex: 1, fontFamily: Theme.typography.fontFamily, fontSize: 13, color: Theme.colors.text },
+  statValue: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '800', color: Theme.colors.primary, minWidth: 34, textAlign: 'right' },
   empty: { alignItems: 'center', paddingTop: 70, paddingHorizontal: 30 },
   emptyText: { fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.textSecondary, marginTop: 12, fontWeight: '700' },
   emptySub: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, marginTop: 6, textAlign: 'center' },

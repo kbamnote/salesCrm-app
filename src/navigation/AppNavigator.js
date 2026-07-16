@@ -61,6 +61,8 @@ import NewClientsScreen from '../screens/main/NewClientsScreen';
 import CampaignLeadsScreen from '../screens/main/CampaignLeadsScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
+import FulfillmentListScreen from '../screens/main/FulfillmentListScreen';
+import FulfillmentDetailScreen from '../screens/main/FulfillmentDetailScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -130,6 +132,7 @@ const DRAWER_COMPONENTS = {
   Support: SupportRequestsScreen,
   SalesPresentation: SalesPresentationScreen,
   TeamManagement: TeamMembersScreen,
+  Fulfillment: FulfillmentListScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header
@@ -141,7 +144,7 @@ const HIDDEN_TAB_SCREENS = [
   'Login', 'AddLead', 'LeadDetail', 'ClientDetail',
   'PresentationForm', 'PresentationRecording', 'ChatRoom', 'NewChat', 'CloseDeal',
   'PayrollEmployee', 'PayslipDetail', 'DealCompleted', 'SendWelcome', 'SendMembership',
-  'WhatsAppChat',
+  'WhatsAppChat', 'FulfillmentDetail',
 ];
 
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
@@ -498,6 +501,7 @@ export default function AppNavigator() {
               <Stack.Screen name="TeamMap"               component={TeamMapScreen}               options={{ headerShown: true, title: 'Team Map', ...headerStyle }} />
               <Stack.Screen name="PayrollEmployee"       component={PayrollEmployeeScreen}       options={({ route }) => ({ headerShown: true, title: route.params?.employee?.name || 'Payroll', ...headerStyle })} />
               <Stack.Screen name="PayslipDetail"         component={PayslipDetailScreen}         options={{ headerShown: true, title: 'Payslip', ...headerStyle }} />
+              <Stack.Screen name="FulfillmentDetail"     component={FulfillmentDetailScreen}     options={{ headerShown: true, title: 'Order Tracking', ...headerStyle }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />

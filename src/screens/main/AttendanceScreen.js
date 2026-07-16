@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Alert, Platform,
-  Modal, TextInput, KeyboardAvoidingView,
+  Modal, TextInput, KeyboardAvoidingView, Keyboard, useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,9 +12,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { attendanceApi, locationsApi } from '../../api';
 import { startBackgroundTracking, stopBackgroundTracking, ensureForegroundPermission } from '../../services/locationTracking';
 import BackgroundLocationDisclosure from '../../components/BackgroundLocationDisclosure';
+import { useAuth } from '../../context/AuthContext';
 
 const BG_CONSENT_KEY = 'bgLocationConsent'; // 'accepted' | 'declined'
 import { Theme } from '../../theme/Theme';
+
+// Punch-out daily report is role-specific. Telecallers & HR file a calling
+// report; everyone else (sales / manager / TL / BDO …) files a field report.
+const CALLING_ROLES = ['telecaller', 'hr'];
+const FIELD_METRICS = [
+  { key: 'freshPresentation', label: 'Fresh Presentation Done' },
+  { key: 'followUpVisit', label: 'Follow up Visit' },
+  { key: 'appointmentAssigned', label: 'Appointment Assigned' },
+  { key: 'appointmentVisit', label: 'Appointment Visit' },
+  { key: 'dealClosed', label: 'Deal Closed' },
+];
+const CALLING_METRICS = [
+  { key: 'totalCalls', label: 'Total Calls Dialed' },
+  { key: 'callsConnected', label: 'Calls Connected' },
+  { key: 'sameDaySchedule', label: 'Same Day Schedule' },
+  { key: 'nextDaySchedule', label: 'Next Day Schedule' },
+  { key: 'otherDaySchedule', label: 'Other Day Schedule' },
+  { key: 'meetingDone', label: 'Meeting Done' },
+  { key: 'dealDone', label: 'Deal Done' },
+];
 
 export default function AttendanceScreen() {
   const [loading, setLoading] = useState(true);
@@ -32,11 +53,39 @@ export default function AttendanceScreen() {
   const bgConsentRef = useRef(null); // 'accepted' | 'declined' | null
 
   // Mandatory daily report — collected before the punch-out camera step.
+  // Format depends on the user's role (field report vs calling report).
+  const { user } = useAuth();
+  const reportType = CALLING_ROLES.includes(user?.role) ? 'calling' : 'field';
+  const reportMetrics = reportType === 'calling' ? CALLING_METRICS : FIELD_METRICS;
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportSummary, setReportSummary] = useState('');
-  const [reportTasks, setReportTasks] = useState('');
-  const [reportPlan, setReportPlan] = useState('');
+  const [reportValues, setReportValues] = useState({}); // { metricKey: '2', ... }
+  const [workCategory, setWorkCategory] = useState(''); // field report only
+  const [reportKbPad, setReportKbPad] = useState(0);     // keyboard-aware bottom padding
   const pendingReportRef = useRef(null); // holds the submitted report until punch-out completes
+  const setMetric = (k, v) => setReportValues((p) => ({ ...p, [k]: v.replace(/[^0-9]/g, '') }));
+
+  // Report-modal scrolling: keep a focused field above the keyboard (Android
+  // modals don't auto-resize, so we scroll the field into view ourselves).
+  const { height: winH } = useWindowDimensions();
+  const reportScrollRef = useRef(null);
+  const reportScrollYRef = useRef(0);
+  const reportInputRefs = useRef({});
+  const scrollReportFieldIntoView = (inputEl) => {
+    const scroll = reportScrollRef.current;
+    if (!scroll || !inputEl || typeof inputEl.measure !== 'function') return;
+    setTimeout(() => {
+      inputEl.measure((x, y, w, h, pageX, pageY) => {
+        if (pageY == null || !scroll.scrollTo) return;
+        const kb = (Keyboard.metrics && Keyboard.metrics()?.height) || 0;
+        const visibleBottom = winH - kb - 24;
+        const fieldBottom = pageY + h;
+        if (fieldBottom > visibleBottom - 8) {
+          const delta = fieldBottom - visibleBottom + 24;
+          scroll.scrollTo({ y: Math.max(0, reportScrollYRef.current + delta), animated: true });
+        }
+      });
+    }, 120);
+  };
 
   useEffect(() => {
     AsyncStorage.getItem(BG_CONSENT_KEY).then((v) => { bgConsentRef.current = v; });
@@ -47,6 +96,16 @@ export default function AttendanceScreen() {
       setTick(t => t + 1);
     }, 60000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Track the keyboard height so the report sheet can scroll its lower fields
+  // clear of the keyboard (Android modals don't auto-resize for the keyboard).
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => setReportKbPad(e?.endCoordinates?.height || 0));
+    const hideSub = Keyboard.addListener(hideEvt, () => setReportKbPad(0));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   const requestLocationPermission = async () => {
@@ -159,21 +218,43 @@ export default function AttendanceScreen() {
   // Punch-out requires a daily report first — open that modal instead of the
   // camera directly. The camera/location step only runs after it's submitted.
   const onPunchOutPress = () => {
-    setReportSummary('');
-    setReportTasks('');
-    setReportPlan('');
+    setReportValues({});
+    setWorkCategory('');
     setReportModalOpen(true);
   };
 
   const submitReport = () => {
-    if (!reportSummary.trim()) {
-      return Alert.alert('Report required', 'Please describe what you worked on today before punching out.');
+    const num = (k) => { const n = parseInt(reportValues[k], 10); return Number.isFinite(n) ? n : 0; };
+
+    let report;
+    if (reportType === 'calling') {
+      report = {
+        type: 'calling',
+        totalCalls: num('totalCalls'),
+        callsConnected: num('callsConnected'),
+        sameDaySchedule: num('sameDaySchedule'),
+        nextDaySchedule: num('nextDaySchedule'),
+        otherDaySchedule: num('otherDaySchedule'),
+        meetingDone: num('meetingDone'),
+        dealDone: num('dealDone'),
+      };
+    } else {
+      if (!workCategory.trim()) {
+        return Alert.alert('Work category required', "Please enter today's work category before punching out.");
+      }
+      report = {
+        type: 'field',
+        freshPresentation: num('freshPresentation'),
+        followUpVisit: num('followUpVisit'),
+        appointmentAssigned: num('appointmentAssigned'),
+        appointmentVisit: num('appointmentVisit'),
+        dealClosed: num('dealClosed'),
+        workCategory: workCategory.trim(),
+      };
     }
-    pendingReportRef.current = {
-      summary: reportSummary.trim(),
-      tasksCompleted: reportTasks.trim(),
-      plan: reportPlan.trim(),
-    };
+
+    pendingReportRef.current = report;
+    Keyboard.dismiss();
     setReportModalOpen(false);
     handlePunchClick('out');
   };
@@ -445,43 +526,53 @@ export default function AttendanceScreen() {
         <View style={styles.reportSheet}>
           <View style={styles.reportHeader}>
             <View>
-              <Text style={styles.reportTitle}>Daily Report</Text>
+              <Text style={styles.reportTitle}>{reportType === 'calling' ? 'Calling Report' : 'Daily Report'}</Text>
               <Text style={styles.reportSubtitle}>Required to punch out</Text>
             </View>
-            <TouchableOpacity onPress={() => setReportModalOpen(false)}>
+            <TouchableOpacity onPress={() => { Keyboard.dismiss(); setReportModalOpen(false); }}>
               <Ionicons name="close" size={24} color={Theme.colors.text} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 28 }} keyboardShouldPersistTaps="handled">
-            <Text style={styles.reportLabel}>What did you work on today? *</Text>
-            <TextInput
-              style={[styles.reportInput, { height: 100, textAlignVertical: 'top' }]}
-              value={reportSummary}
-              onChangeText={setReportSummary}
-              multiline
-              placeholder="Summary of your work today…"
-              placeholderTextColor={Theme.colors.textSecondary}
-            />
+          <ScrollView
+            ref={reportScrollRef}
+            contentContainerStyle={{ padding: 18, paddingBottom: 28 + reportKbPad }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onScroll={(e) => { reportScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+            scrollEventThrottle={16}
+          >
+            {reportMetrics.map((m) => (
+              <View key={m.key} style={styles.metricRow}>
+                <Text style={styles.metricLabel}>{m.label}</Text>
+                <TextInput
+                  ref={(el) => { reportInputRefs.current[m.key] = el; }}
+                  style={styles.metricInput}
+                  value={reportValues[m.key] ?? ''}
+                  onChangeText={(v) => setMetric(m.key, v)}
+                  onFocus={() => scrollReportFieldIntoView(reportInputRefs.current[m.key])}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                  maxLength={5}
+                />
+              </View>
+            ))}
 
-            <Text style={styles.reportLabel}>Key tasks / visits / deals (optional)</Text>
-            <TextInput
-              style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
-              value={reportTasks}
-              onChangeText={setReportTasks}
-              multiline
-              placeholder="e.g. 3 client visits, closed 1 deal…"
-              placeholderTextColor={Theme.colors.textSecondary}
-            />
-
-            <Text style={styles.reportLabel}>Plan for tomorrow (optional)</Text>
-            <TextInput
-              style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
-              value={reportPlan}
-              onChangeText={setReportPlan}
-              multiline
-              placeholder="What you plan to do next…"
-              placeholderTextColor={Theme.colors.textSecondary}
-            />
+            {reportType === 'field' && (
+              <>
+                <Text style={styles.reportLabel}>Today's Work Category *</Text>
+                <TextInput
+                  ref={(el) => { reportInputRefs.current.workCategory = el; }}
+                  style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
+                  value={workCategory}
+                  onChangeText={setWorkCategory}
+                  onFocus={() => scrollReportFieldIntoView(reportInputRefs.current.workCategory)}
+                  multiline
+                  placeholder="e.g. Builder and developer, Financial services"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                />
+              </>
+            )}
 
             <TouchableOpacity style={styles.reportSubmit} onPress={submitReport}>
               <Ionicons name="exit-outline" size={18} color="#fff" />
@@ -739,6 +830,16 @@ const styles = StyleSheet.create({
   reportInput: {
     backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border,
     paddingHorizontal: 14, paddingVertical: 12, fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.text,
+  },
+  metricRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EEF1F5', gap: 12,
+  },
+  metricLabel: { flex: 1, fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.text, fontWeight: '600' },
+  metricInput: {
+    width: 76, textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1,
+    borderColor: Theme.colors.border, paddingHorizontal: 10, paddingVertical: 10,
+    fontFamily: Theme.typography.fontFamily, fontSize: 16, fontWeight: '700', color: Theme.colors.text,
   },
   reportSubmit: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

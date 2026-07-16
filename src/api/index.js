@@ -95,11 +95,31 @@ export const dealsApi = {
   monthly: (months = 6) => api.get('/deals/monthly', { params: { months } }),
   // Record a payment against a closed deal (mode: cash|pdc|upi|card).
   addPayment: (id, data) => api.post(`/deals/${id}/payment`, data),
+  // Razorpay Standard Checkout: create an order, then verify the completed payment.
+  createRazorpayOrder: (id, amount) => api.post(`/deals/${id}/razorpay/order`, { amount }),
+  verifyRazorpayPayment: (id, data) => api.post(`/deals/${id}/razorpay/verify`, data),
 };
 
 export const tapifyCardApi = {
   // Create the customer's Tapify card (user + vCard) via the CRM bridge.
   create: (data) => api.post('/tapify-card/create', data),
+};
+
+// Post-sale fulfillment pipeline — order tracking through the SOP stages.
+export const fulfillmentApi = {
+  list: (params) => api.get('/fulfillments', { params }),
+  get: (id) => api.get(`/fulfillments/${id}`),
+  stats: () => api.get('/fulfillments/stats'), // oversight only
+
+  toggleChecklist: (id, stageKey, index, done) =>
+    api.patch(`/fulfillments/${id}/checklist`, { stageKey, index, done }),
+  setWebsite: (id, data) => api.patch(`/fulfillments/${id}/website`, data),
+  shareWebsite: (id, previewUrl) => api.post(`/fulfillments/${id}/website/share`, { previewUrl }),
+  // Send the customer their data-collection / feedback form link over WhatsApp.
+  shareDataForm: (id) => api.post(`/fulfillments/${id}/data/share`),
+  shareFeedback: (id) => api.post(`/fulfillments/${id}/feedback/share`),
+  completeStage: (id, stageKey, note) =>
+    api.post(`/fulfillments/${id}/stages/${stageKey}/complete`, { note }),
 };
 
 export const designsApi = {

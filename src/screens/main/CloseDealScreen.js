@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import RazorpayCheckout from 'react-native-razorpay';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { dealsApi } from '../../api';
@@ -28,7 +29,7 @@ const CART = [
 ];
 
 const PAY_MODES = [
-  { key: 'razorpay', label: 'Razorpay', icon: 'flash-outline', soon: true },
+  { key: 'razorpay', label: 'Razorpay', icon: 'flash-outline' },
   { key: 'cash', label: 'Cash', icon: 'cash-outline' },
   { key: 'pdc', label: 'PDC', icon: 'document-outline' },
 ];
@@ -179,6 +180,9 @@ export default function CloseDealScreen({ navigation }) {
       if (pay.mode === 'pdc' && Number(pay.collectNow) > 0 && !pay.pdcImageUrl) {
         Alert.alert('PDC photo', 'Please upload a photo of the PDC cheque.'); return false;
       }
+      if (pay.mode === 'razorpay' && !(Number(pay.collectNow) > 0)) {
+        Alert.alert('Amount to collect', 'Enter an amount to collect via Razorpay, or choose another payment mode.'); return false;
+      }
     }
     return true;
   };
@@ -217,6 +221,50 @@ export default function CloseDealScreen({ navigation }) {
       ),
     });
   }, [navigation, step]);
+
+  // Opens Razorpay Standard Checkout on the rep's phone for the given amount,
+  // then verifies the completed payment against the deal. Never throws — a
+  // cancelled/failed checkout just leaves the deal payment-pending.
+  const collectViaRazorpay = async (meetingId, amount) => {
+    let checkoutResult;
+    try {
+      const order = await dealsApi.createRazorpayOrder(meetingId, amount);
+      const { order_id, amount_paise, currency, key_id } = order.data;
+      checkoutResult = await RazorpayCheckout.open({
+        key: key_id,
+        amount: amount_paise,
+        currency,
+        order_id,
+        name: 'Tapify',
+        description: 'Deal payment',
+        prefill: {
+          name: (basic.ownerName || basic.companyName || '').trim(),
+          contact: basic.contactNo.trim(),
+          email: basic.email.trim(),
+        },
+        theme: { color: Theme.colors.primary },
+      });
+    } catch (e) {
+      Alert.alert('Payment not completed', 'The deal has been saved. You can collect this payment another way.');
+      return;
+    }
+
+    try {
+      await dealsApi.verifyRazorpayPayment(meetingId, {
+        order_id: checkoutResult.razorpay_order_id,
+        payment_id: checkoutResult.razorpay_payment_id,
+        signature: checkoutResult.razorpay_signature,
+      });
+      paidRef.current = amount;
+    } catch (e) {
+      // The payment may have actually gone through on Razorpay's side even
+      // though our confirmation call failed — don't tell the rep it failed.
+      Alert.alert(
+        'Payment received — confirming',
+        'The payment went through but we could not confirm it right now. It will be marked paid once verified.'
+      );
+    }
+  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -266,19 +314,23 @@ export default function CloseDealScreen({ navigation }) {
       }
       const closed = closedRef.current;
 
-      // 2) Record the collected payment once (cash/pdc). Razorpay is deferred →
-      //    the deal stays payment-pending. Only PDC carries a cheque photo.
+      // 2) Record the collected payment once. Only PDC carries a cheque photo;
+      //    Razorpay opens Standard Checkout right here on the rep's phone.
       const collect = Number(pay.collectNow) || 0;
-      if (!paidRef.current && closed.meetingId && (pay.mode === 'cash' || pay.mode === 'pdc') && collect > 0) {
-        try {
-          await dealsApi.addPayment(closed.meetingId, {
-            mode: pay.mode,
-            amount: collect,
-            ref: pay.ref.trim(),
-            proofUrl: pay.mode === 'pdc' ? (pay.pdcImageUrl || '') : '',
-          });
-          paidRef.current = collect;
-        } catch (e) { /* deal already created — proceed; balance can be taken next step */ }
+      if (!paidRef.current && closed.meetingId && collect > 0) {
+        if (pay.mode === 'razorpay') {
+          await collectViaRazorpay(closed.meetingId, collect);
+        } else if (pay.mode === 'cash' || pay.mode === 'pdc') {
+          try {
+            await dealsApi.addPayment(closed.meetingId, {
+              mode: pay.mode,
+              amount: collect,
+              ref: pay.ref.trim(),
+              proofUrl: pay.mode === 'pdc' ? (pay.pdcImageUrl || '') : '',
+            });
+            paidRef.current = collect;
+          } catch (e) { /* deal already created — proceed; balance can be taken next step */ }
+        }
       }
 
       navigation.navigate('DealCompleted', {
@@ -474,17 +526,19 @@ export default function CloseDealScreen({ navigation }) {
                   <TouchableOpacity key={m.key} style={[styles.modeChip, active && styles.modeChipActive]} onPress={() => setPay((p) => ({ ...p, mode: m.key, pdcImageUrl: m.key === 'pdc' ? p.pdcImageUrl : '' }))}>
                     <Ionicons name={m.icon} size={16} color={active ? '#fff' : Theme.colors.primary} />
                     <Text style={[styles.modeText, active && { color: '#fff' }]}>{m.label}</Text>
-                    {m.soon && <Text style={[styles.soonTag, active && { color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }]}>SOON</Text>}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
             {pay.mode === 'razorpay' ? (
-              <View style={styles.soonBox}>
-                <Ionicons name="flash-outline" size={16} color={Theme.colors.textSecondary} />
-                <Text style={styles.soonBoxText}>Razorpay online payment will be integrated soon. The deal will be saved with payment marked pending.</Text>
-              </View>
+              <>
+                <Field label="Amount to Collect via Razorpay (₹)" value={pay.collectNow} onChange={(v) => setPy('collectNow', v)} keyboardType="numeric" />
+                <View style={styles.soonBox}>
+                  <Ionicons name="flash-outline" size={16} color={Theme.colors.textSecondary} />
+                  <Text style={styles.soonBoxText}>Tapping "Close Deal" opens Razorpay Checkout on this phone. The deal is saved either way — if the payment isn't completed, it stays marked pending.</Text>
+                </View>
+              </>
             ) : (
               <>
                 <Field label="Amount Collected Now (₹)" value={pay.collectNow} onChange={(v) => setPy('collectNow', v)} keyboardType="numeric" />
@@ -629,7 +683,6 @@ const styles = StyleSheet.create({
   modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: Theme.colors.border, backgroundColor: '#fff' },
   modeChipActive: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
   modeText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.primary },
-  soonTag: { fontFamily: Theme.typography.fontFamily, fontSize: 8, fontWeight: '800', color: Theme.colors.textSecondary, borderWidth: 1, borderColor: Theme.colors.border, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1, marginLeft: 2 },
   soonBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginTop: 10 },
   soonBoxText: { flex: 1, fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, lineHeight: 17 },
 

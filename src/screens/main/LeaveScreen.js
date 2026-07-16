@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useLayoutEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal, TextInput, ScrollView,
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { leavesApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
@@ -38,6 +38,7 @@ const isReviewer = (role) => role === 'admin' || role === 'hr';
 
 export default function LeaveScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation();
   const canReview = isReviewer(user?.role);
 
   const [tab, setTab] = useState('mine'); // 'mine' | 'requests'
@@ -77,6 +78,22 @@ export default function LeaveScreen() {
   };
 
   useFocusEffect(useCallback(() => { setLoading(true); load(); }, []));
+
+  // Header "+" to apply for leave — always available (incl. admin/HR on the
+  // Requests tab, where the bottom "Apply" button is hidden).
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setApplyOpen(true)}
+          style={{ marginRight: 16 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="add" size={28} color={Theme.colors.white} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const resetForm = () => {
     setLeaveType('casual');

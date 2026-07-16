@@ -55,6 +55,7 @@ export const DRAWER_DEFS = {
   CampaignLeads:       { title: 'Campaign Leads',   icon: 'megaphone-outline' },
   Support:             { title: 'Support',          icon: 'help-buoy-outline' },
   SalesPresentation:   { title: 'Sales Presentation', icon: 'easel-outline' },
+  Fulfillment:         { title: 'Orders',           icon: 'cube-outline' },
 };
 
 // ───── Role presets ─────
@@ -62,7 +63,7 @@ export const DRAWER_DEFS = {
 // Field reps — the original/unchanged experience.
 const fieldRep = {
   tabs: ['Dashboard', 'Leads', 'Clients', 'Profile'],
-  drawer: ['Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
@@ -70,7 +71,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'MyPayslips'],
+  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -83,7 +84,7 @@ export const ROLE_CONFIG = {
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
     tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
-    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'MyPayslips'],
+    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'Fulfillment', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
@@ -91,7 +92,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
+    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -106,7 +107,7 @@ export const ROLE_CONFIG = {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
     drawer: [
       'TeamManagement', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
-      'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Onboarding', 'Calls', 'Designs',
+      'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'PresentationHistory', 'ChatList',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
@@ -118,10 +119,18 @@ export const ROLE_CONFIG = {
     },
   },
 
-  // Designer — mainly uses the web panel; minimal app.
+  // Designer — mainly uses the web panel; minimal app. Owns the website stage.
   designer: {
     tabs: ['Designs', 'Profile'],
-    drawer: ['Leave', 'ChatList', 'MyPayslips'],
+    drawer: ['Fulfillment', 'Attendance', 'Leave', 'ChatList', 'MyPayslips'],
+    landing: 'Designs',
+    can: {},
+  },
+
+  // Social media manager — sets up client socials (the conditional pipeline stage).
+  social_media: {
+    tabs: ['Designs', 'Profile'],
+    drawer: ['Fulfillment', 'Attendance', 'Leave', 'ChatList', 'MyPayslips'],
     landing: 'Designs',
     can: {},
   },
