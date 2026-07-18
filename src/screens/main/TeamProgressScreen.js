@@ -12,7 +12,7 @@ const curMonth = () => new Date().toISOString().slice(0, 7);
 
 const targetMeta = (role) => {
   if (role === 'tme') return { unit: 'appointments', label: 'Appointment Target' };
-  if (role === 'telecaller') return { unit: 'appointments', label: 'Appointments / month' };
+  if (role === 'telecaller' || role === 'assistant_hr') return { unit: 'appointments', label: 'Appointments / month' };
   if (role === 'tms') return { unit: 'calls', label: 'Call Target' };
   if (role === 'hr') return { unit: 'hirings', label: 'Hiring Target' };
   return { unit: 'revenue', label: 'Revenue Target' };

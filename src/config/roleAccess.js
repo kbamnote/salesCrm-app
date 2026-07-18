@@ -84,6 +84,16 @@ export const ROLE_CONFIG = {
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
     tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
+    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'MyPayslips'],
+    landing: 'TelecallerDashboard',
+    can: { addLead: true },
+  },
+
+  // Assistant HR — same as a telecaller (does calling) but ALSO owns the
+  // fulfillment Data Collection & Kit Check stages, so she gets the Orders
+  // section that regular telecallers don't see.
+  assistant_hr: {
+    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
     drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'Fulfillment', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },

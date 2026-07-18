@@ -19,7 +19,7 @@ import { Theme } from '../../theme/Theme';
 
 // Punch-out daily report is role-specific. Telecallers & HR file a calling
 // report; everyone else (sales / manager / TL / BDO …) files a field report.
-const CALLING_ROLES = ['telecaller', 'hr'];
+const CALLING_ROLES = ['telecaller', 'hr', 'assistant_hr'];
 const FIELD_METRICS = [
   { key: 'freshPresentation', label: 'Fresh Presentation Done' },
   { key: 'followUpVisit', label: 'Follow up Visit' },
