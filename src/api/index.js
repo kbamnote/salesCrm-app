@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'https://sales-crm-backend-production-0187.up.railway.app/api';
+export const API_URL = 'https://crm-api.tapify.co.in/api';
 // Socket.IO connects to the server origin (without the /api suffix).
 export const SOCKET_URL = API_URL.replace(/\/api\/?$/, '');
 

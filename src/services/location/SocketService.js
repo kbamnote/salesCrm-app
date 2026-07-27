@@ -30,7 +30,10 @@ async function connect() {
   if (!socket) {
     socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      // Polling first: the API is fronted by a Vercel proxy (fixes Jio routing)
+      // that doesn't carry WebSockets, so polling connects immediately. Socket.IO
+      // still attempts a WS upgrade in the background where it's available.
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
