@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, Platform,
@@ -104,6 +104,40 @@ export default function DailyReportsScreen() {
     if (e?.type !== 'dismissed' && d) setDate(d);
   };
 
+  // Aggregate the day's reports into overall Calling-team and Sales-team totals.
+  const summary = useMemo(() => {
+    const calling = reports.filter((r) => r.report?.type === 'calling');
+    const field = reports.filter((r) => r.report?.type === 'field');
+    const sum = (list, key) => list.reduce((s, r) => s + Number(r.report?.[key] || 0), 0);
+    return {
+      callingCount: calling.length,
+      fieldCount: field.length,
+      calling: CALLING_METRICS.map((m) => ({ ...m, total: sum(calling, m.key) })),
+      field: FIELD_METRICS.map((m) => ({ ...m, total: sum(field, m.key) })),
+    };
+  }, [reports]);
+
+  const SummaryCard = ({ title, count, metrics }) => (
+    <View style={styles.summaryCard}>
+      <Text style={styles.summaryTitle}>{title} · {count} reported</Text>
+      <View style={styles.summaryGrid}>
+        {metrics.map((m) => (
+          <View key={m.key} style={styles.summaryTile}>
+            <Text style={styles.summaryNum}>{m.total}</Text>
+            <Text style={styles.summaryLbl}>{m.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const summaryHeader = reports.length ? (
+    <View>
+      {summary.callingCount > 0 && <SummaryCard title="📞 Calling Team" count={summary.callingCount} metrics={summary.calling} />}
+      {summary.fieldCount > 0 && <SummaryCard title="🧑‍💼 Sales Team" count={summary.fieldCount} metrics={summary.field} />}
+    </View>
+  ) : null;
+
   const renderItem = ({ item }) => {
     const u = item.userId || {};
     const hrs = item.hoursWorked ? item.hoursWorked.toFixed(1) : '--';
@@ -153,6 +187,7 @@ export default function DailyReportsScreen() {
         renderItem={renderItem}
         contentContainerStyle={{ padding: 14, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(date); }} tintColor={Theme.colors.primary} />}
+        ListHeaderComponent={summaryHeader}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="document-text-outline" size={48} color={Theme.colors.border} />
@@ -179,6 +214,12 @@ const styles = StyleSheet.create({
   },
   dateText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '700', color: Theme.colors.text },
   countText: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, fontWeight: '600' },
+  summaryCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: Theme.colors.primary + '22' },
+  summaryTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 14, fontWeight: '900', color: Theme.colors.text, marginBottom: 10 },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  summaryTile: { backgroundColor: '#F5F7FA', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center', flexGrow: 1, flexBasis: '30%', minWidth: 90 },
+  summaryNum: { fontFamily: Theme.typography.fontFamily, fontSize: 20, fontWeight: '900', color: Theme.colors.primary },
+  summaryLbl: { fontFamily: Theme.typography.fontFamily, fontSize: 10, color: Theme.colors.textSecondary, textAlign: 'center', marginTop: 2 },
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Theme.colors.primary + '22', alignItems: 'center', justifyContent: 'center' },

@@ -18,6 +18,13 @@ const targetMeta = (role) => {
   return { unit: 'revenue', label: 'Revenue Target' };
 };
 
+const fmtVal = (v, unit) =>
+  unit === 'revenue' ? `₹${Number(v || 0).toLocaleString('en-IN')}` : `${Number(v || 0).toLocaleString()} ${unit}`;
+const monthName = (m) => {
+  const [y, mo] = m.split('-').map(Number);
+  return new Date(y, mo - 1, 1).toLocaleDateString([], { month: 'short', year: '2-digit' });
+};
+
 export default function SetTargetScreen() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
@@ -28,6 +35,8 @@ export default function SetTargetScreen() {
   const [month, setMonth] = useState(curMonth());
   const [target, setTarget] = useState('');
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const meta = targetMeta(selectedUser?.role);
   const myId = String(me?._id || me?.id || '');
@@ -59,6 +68,16 @@ export default function SetTargetScreen() {
 
   useEffect(() => { loadUsers(); }, []);
   useEffect(() => { loadExisting(month); }, [month]);
+
+  // When an employee is picked, load their rolling target history + carry-forward.
+  useEffect(() => {
+    if (!selectedUser?._id) { setHistory(null); return; }
+    setHistoryLoading(true);
+    targetsApi.history({ userId: selectedUser._id, months: 6 })
+      .then((r) => setHistory(r.data))
+      .catch(() => setHistory(null))
+      .finally(() => setHistoryLoading(false));
+  }, [selectedUser?._id]);
 
   const shiftMonth = (delta) => {
     const [y, m] = month.split('-').map(Number);
@@ -127,6 +146,50 @@ export default function SetTargetScreen() {
       {selectedUser ? (
         <Text style={styles.hint}>Setting a {meta.unit} target for {selectedUser.name}.</Text>
       ) : null}
+
+      {/* Carry-forward + history for the selected employee */}
+      {selectedUser && historyLoading && (
+        <ActivityIndicator color={Theme.colors.primary} style={{ marginTop: 14 }} />
+      )}
+      {selectedUser && history && !historyLoading && (
+        <View style={{ marginTop: 14 }}>
+          {history.current?.carryIn > 0 ? (
+            <View style={styles.carryBanner}>
+              <Ionicons name="trending-up-outline" size={18} color="#B45309" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.carryText}>
+                  {fmtVal(history.current.carryIn, history.unit)} pending from past months.
+                </Text>
+                {Number(target) > 0 ? (
+                  <Text style={styles.carrySub}>
+                    Effective target this month: {fmtVal((Number(target) || 0) + history.current.carryIn, history.unit)}
+                  </Text>
+                ) : null}
+                <TouchableOpacity onPress={() => setTarget(String((Number(target) || 0) + history.current.carryIn))}>
+                  <Text style={styles.carryAdd}>+ Add pending amount to this target</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.hint}>No shortfall carried forward — all past targets met. 🎉</Text>
+          )}
+
+          <Text style={[styles.label, { marginTop: 16 }]}>Past months</Text>
+          {history.history.filter((h) => h.baseTarget > 0 || h.achieved > 0).slice(0, -1).reverse().map((h) => (
+            <View key={h.month} style={styles.histRow}>
+              <Text style={styles.histMonth}>{monthName(h.month)}</Text>
+              <View style={styles.histStats}>
+                <Text style={styles.histStat}>Target <Text style={styles.histNum}>{fmtVal(h.due, history.unit)}</Text></Text>
+                <Text style={styles.histStat}>Done <Text style={[styles.histNum, { color: '#059669' }]}>{fmtVal(h.achieved, history.unit)}</Text></Text>
+                <Text style={styles.histStat}>Left <Text style={[styles.histNum, { color: h.remaining > 0 ? '#DC2626' : '#059669' }]}>{fmtVal(h.remaining, history.unit)}</Text></Text>
+              </View>
+            </View>
+          ))}
+          {history.history.filter((h) => h.baseTarget > 0 || h.achieved > 0).length <= 1 && (
+            <Text style={styles.empty}>No past target history yet.</Text>
+          )}
+        </View>
+      )}
 
       <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : (
@@ -203,6 +266,15 @@ const styles = StyleSheet.create({
   placeholder: { color: Theme.colors.textSecondary },
   input: { backgroundColor: '#fff', borderRadius: Theme.borderRadius.m, borderWidth: 1, borderColor: Theme.colors.border, paddingHorizontal: 14, paddingVertical: 12, fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m, color: Theme.colors.text },
   hint: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.xs, color: Theme.colors.textSecondary, marginTop: 6 },
+  carryBanner: { flexDirection: 'row', gap: 10, backgroundColor: '#FEF3C7', borderRadius: Theme.borderRadius.m, padding: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  carryText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '800', color: '#92400E' },
+  carrySub: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: '#92400E', marginTop: 3 },
+  carryAdd: { fontFamily: Theme.typography.fontFamily, fontSize: 12, fontWeight: '800', color: Theme.colors.primary, marginTop: 6 },
+  histRow: { backgroundColor: '#fff', borderRadius: Theme.borderRadius.m, padding: 12, marginTop: 8, borderWidth: 1, borderColor: Theme.colors.border },
+  histMonth: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '800', color: Theme.colors.text, marginBottom: 6 },
+  histStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  histStat: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary },
+  histNum: { fontWeight: '800', color: Theme.colors.text },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Theme.colors.primary, borderRadius: Theme.borderRadius.m, paddingVertical: 15, marginTop: Theme.spacing.l },
   saveText: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m, fontWeight: Theme.typography.weights.bold, color: '#fff' },
   empty: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s, color: Theme.colors.textSecondary, marginTop: 8 },

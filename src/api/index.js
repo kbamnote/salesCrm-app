@@ -67,6 +67,8 @@ export const targetsApi = {
   team: (month) => api.get('/targets/team', { params: { month } }),
   // Department target totals (sales team / telecallers / HR) — admin dashboard.
   summary: (month) => api.get('/targets/summary', { params: { month } }),
+  // Rolling target history + carry-forward for a user (self, or any user for managers).
+  history: (params) => api.get('/targets/history', { params }),
   set: (data) => api.post('/targets', data), // { userId, month, target } — HR/manager/admin
 };
 
