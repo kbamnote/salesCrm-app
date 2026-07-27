@@ -95,6 +95,12 @@
         "projectId": "88da1282-e5c4-46e9-aae7-a48f7880cc6b"
       }
     },
-    "owner": "imtech1s-organization"
+    "owner": "imtech1s-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/88da1282-e5c4-46e9-aae7-a48f7880cc6b"
+    }
   }
 }
