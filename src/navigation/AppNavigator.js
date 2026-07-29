@@ -64,6 +64,7 @@ import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
 import FulfillmentListScreen from '../screens/main/FulfillmentListScreen';
 import FulfillmentDetailScreen from '../screens/main/FulfillmentDetailScreen';
+import TeamAttendanceScreen from '../screens/main/TeamAttendanceScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -135,6 +136,7 @@ const DRAWER_COMPONENTS = {
   SalesPresentation: SalesPresentationScreen,
   TeamManagement: TeamMembersScreen,
   Fulfillment: FulfillmentListScreen,
+  TeamAttendance: TeamAttendanceScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header
@@ -293,7 +295,7 @@ function HomeStack({ navigation: drawerNav }) {
 const ADMIN_DRAWER_SECTIONS = [
   { key: 'sales',      title: 'Sales',      icon: 'briefcase-outline', items: ['TeamMap', 'RouteHistory', 'TeamProgress', 'Targets', 'PresentationHistory', 'Designs'] },
   { key: 'telecaller', title: 'Telecaller', icon: 'headset-outline',   items: ['TelecallerDashboard', 'Calls', 'WhatsApp'] },
-  { key: 'hr',         title: 'HR',         icon: 'people-outline',     items: ['HRDashboard', 'Onboarding', 'TeamManagement', 'Payroll', 'OfferLetter', 'Agreement', 'SendNotification'] },
+  { key: 'hr',         title: 'HR',         icon: 'people-outline',     items: ['HRDashboard', 'Onboarding', 'TeamManagement', 'Payroll', 'OfferLetter', 'Agreement', 'SendNotification', 'Attendance', 'TeamAttendance'] },
   { key: 'general',    title: 'General',    icon: 'apps-outline',       items: ['MyPayslips'] },
 ];
 

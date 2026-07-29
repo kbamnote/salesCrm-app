@@ -57,6 +57,7 @@ export const DRAWER_DEFS = {
   Support:             { title: 'Support',          icon: 'help-buoy-outline' },
   SalesPresentation:   { title: 'Sales Presentation', icon: 'easel-outline' },
   Fulfillment:         { title: 'Orders',           icon: 'cube-outline' },
+  TeamAttendance:      { title: 'Team Attendance',  icon: 'clipboard-outline' },
 };
 
 // ───── Role presets ─────
@@ -95,15 +96,15 @@ export const ROLE_CONFIG = {
   // section that regular telecallers don't see.
   assistant_hr: {
     tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
-    drawer: ['Attendance', 'Leave', 'Designs', 'Fulfillment', 'MyPayslips'],
+    drawer: ['CloseDeal', 'Attendance', 'Leave', 'Designs', 'Fulfillment', 'MyPayslips'],
     landing: 'TelecallerDashboard',
-    can: { addLead: true },
+    can: { addLead: true, closeDeal: true },
   },
 
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'ChatList', 'Profile'],
-    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'Designs', 'MyPayslips'],
+    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'TeamAttendance', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -120,7 +121,8 @@ export const ROLE_CONFIG = {
       'TeamManagement', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
-      'PresentationHistory',
+      'Attendance',
+      'PresentationHistory', 'TeamAttendance',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
     landing: 'Dashboard',

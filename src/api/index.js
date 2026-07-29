@@ -122,6 +122,10 @@ export const fulfillmentApi = {
   shareFeedback: (id) => api.post(`/fulfillments/${id}/feedback/share`),
   completeStage: (id, stageKey, note) =>
     api.post(`/fulfillments/${id}/stages/${stageKey}/complete`, { note }),
+  // Assistant HR / admin: start a pipeline from a closed deal.
+  createFromMeeting: (meetingId) => api.post(`/fulfillments/create-from-meeting/${meetingId}`),
+  // Assistant HR / admin: list closed deals that don't have a pipeline yet.
+  eligibleDeals: () => api.get('/fulfillments/eligible-deals'),
 };
 
 export const designsApi = {
