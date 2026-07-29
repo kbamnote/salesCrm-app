@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -472,19 +472,36 @@ export default function AppNavigator() {
   const tabs = roleCfg.tabs.map((name) => ({ name, ...TAB_DEFS[name] }));
   const [currentRoute, setCurrentRoute] = useState(roleCfg.landing);
 
-  const onReady = () => {
+  // A chat notification tapped while the app was killed fires long BEFORE auth
+  // finishes and the navigator mounts, so the target is queued here and opened
+  // by flushPendingChat() once both are actually ready.
+  const pendingChat = useRef(null);
+  const seenNotifIds = useRef(new Set());
+
+  const flushPendingChat = useCallback(() => {
+    const target = pendingChat.current;
+    if (!target) return;
+    // ChatRoom only exists in the signed-in stack, and navigate() is a no-op
+    // before the container mounts — stay queued until both hold.
+    if (!user || !navigationRef.current?.isReady?.()) return;
+    pendingChat.current = null;
+    try {
+      navigationRef.current.navigate('ChatRoom', { chatId: target.chatId, chatName: target.chatName });
+      // Persist "handled" only AFTER opening, so a start that failed to reach
+      // the chat can still retry instead of being swallowed forever.
+      if (target.id) AsyncStorage.setItem('handledChatNotif', target.id).catch(() => {});
+    } catch (_) { /* keep it unhandled; a later flush can retry */ }
+  }, [user]);
+
+  const syncRoute = () => {
     if (navigationRef.current) {
       const route = navigationRef.current.getCurrentRoute();
       if (route?.name) setCurrentRoute(route.name);
     }
   };
 
-  const onStateChange = () => {
-    if (navigationRef.current) {
-      const route = navigationRef.current.getCurrentRoute();
-      if (route?.name) setCurrentRoute(route.name);
-    }
-  };
+  const onReady = () => { syncRoute(); flushPendingChat(); };
+  const onStateChange = syncRoute;
 
   // Tapping a chat notification opens that specific conversation (like WhatsApp).
   useEffect(() => {
@@ -492,21 +509,27 @@ export default function AppNavigator() {
       const data = response?.notification?.request?.content?.data || {};
       if (data.type !== 'chat' || !data.chatId) return;
       const id = response?.notification?.request?.identifier || '';
-      const last = await AsyncStorage.getItem('handledChatNotif').catch(() => null);
-      if (id && id === last) return;            // don't reopen on a later cold start
-      if (id) AsyncStorage.setItem('handledChatNotif', id).catch(() => {});
-      const go = () => {
-        try {
-          navigationRef.current?.navigate('ChatRoom', { chatId: data.chatId, chatName: data.chatName });
-        } catch (_) { /* nav not ready / not logged in */ }
-      };
-      if (navigationRef.current?.isReady?.()) go();
-      else setTimeout(go, 900);                 // cold start: wait for the navigator
+      if (id) {
+        // On a cold start the same tap can arrive twice (listener + the
+        // getLastNotificationResponseAsync below) — handle it once.
+        if (seenNotifIds.current.has(id)) return;
+        seenNotifIds.current.add(id);
+        const last = await AsyncStorage.getItem('handledChatNotif').catch(() => null);
+        if (id === last) return;                // already opened on an earlier launch
+      }
+      pendingChat.current = { chatId: data.chatId, chatName: data.chatName, id };
+      flushPendingChat();
     };
     const sub = Notifications.addNotificationResponseReceivedListener(openChat);
+    // Cold start: the tap that launched the app is delivered here, not to the listener.
     Notifications.getLastNotificationResponseAsync().then((r) => { if (r) openChat(r); }).catch(() => {});
     return () => sub.remove();
-  }, []);
+  }, [flushPendingChat]);
+
+  // Cold start: open the queued chat the moment auth resolves and the navigator
+  // mounts. Replaces a fixed 900ms timer that silently lost the tap on slow
+  // launches (and left the user on the dashboard).
+  useEffect(() => { flushPendingChat(); }, [user, loading, flushPendingChat]);
 
   if (loading) {
     return (
