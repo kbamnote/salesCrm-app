@@ -13,6 +13,7 @@ import { Theme } from '../theme/Theme';
 import LocationReporter from '../components/LocationReporter';
 import UpdateChecker from '../components/UpdateChecker';
 import { getRoleConfig, TAB_DEFS, DRAWER_DEFS } from '../config/roleAccess';
+import useUnreadChats from '../hooks/useUnreadChats';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -151,6 +152,9 @@ const HIDDEN_TAB_SCREENS = [
 /** Global floating tab bar — rendered outside navigation so it appears everywhere */
 function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
   const insets = useSafeAreaInsets();
+  // Live unread badge for the Chat tab. Called before the early return below so
+  // the hook order stays stable across renders.
+  const unreadChats = useUnreadChats(currentRoute);
 
   if (HIDDEN_TAB_SCREENS.includes(currentRoute)) return null;
 
@@ -184,6 +188,7 @@ function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
     }}>
       {tabs.map((tab) => {
         const isFocused = currentRoute === tab.name;
+        const badge = tab.name === 'ChatList' ? unreadChats : 0;
         return (
           <TouchableOpacity
             key={tab.name}
@@ -191,20 +196,28 @@ function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
             activeOpacity={0.8}
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 58 }}
           >
-            <View style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              overflow: 'hidden',
-              backgroundColor: isFocused ? '#ffffff' : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Ionicons
-                name={isFocused ? tab.active : tab.inactive}
-                size={24}
-                color={isFocused ? Theme.colors.primary : '#ffffff'}
-              />
+            {/* Wrapper gives the badge a positioning context sized to the icon. */}
+            <View>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                overflow: 'hidden',
+                backgroundColor: isFocused ? '#ffffff' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Ionicons
+                  name={isFocused ? tab.active : tab.inactive}
+                  size={24}
+                  color={isFocused ? Theme.colors.primary : '#ffffff'}
+                />
+              </View>
+              {badge > 0 && (
+                <View style={tabBarStyles.badge}>
+                  <Text style={tabBarStyles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                </View>
+              )}
             </View>
           </TouchableOpacity>
         );
@@ -212,6 +225,30 @@ function GlobalTabBar({ navigationRef, currentRoute, tabs }) {
     </View>
   );
 }
+
+const tabBarStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Ring in the bar colour so the badge reads clearly over the icon.
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primary,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: Theme.typography.fontFamily,
+  },
+});
 
 /** Inner tabs (no visible tab bar — handled by GlobalTabBar). Role-driven. */
 const InnerStack = createNativeStackNavigator();
