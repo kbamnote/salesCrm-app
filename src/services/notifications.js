@@ -13,6 +13,7 @@ const PUSH_TOKEN_KEY = 'expoPushToken';
 // NOTE: these ids MUST match the channelId the backend sends (see push.js).
 export const CHANNEL_DEFAULT = 'default_v2';
 export const CHANNEL_DEAL = 'deal';
+export const CHANNEL_CHAT = 'chat';
 
 // Show notifications while the app is foregrounded too. (Set once at import.)
 Notifications.setNotificationHandler({
@@ -41,6 +42,15 @@ async function ensureAndroidChannel() {
     sound: 'clap.mp3',
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#10B981',
+  });
+  // Team chat → the phone's own notification sound (no custom tone), so chats
+  // feel like every other messaging app. 'default' = the system sound.
+  await Notifications.setNotificationChannelAsync(CHANNEL_CHAT, {
+    name: 'Team Chat',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#4a90e2',
   });
 }
 
