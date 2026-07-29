@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator
+  RefreshControl, ActivityIndicator, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatApi, usersApi } from '../../api';
 import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
+import { photoUri, initialsOf } from '../../utils/avatar';
 import { Theme } from '../../theme/Theme';
 
 export default function ChatListScreen({ navigation }) {
@@ -58,8 +59,6 @@ export default function ChatListScreen({ navigation }) {
     return () => { if (unsub) unsub(); if (unsubGroup) unsubGroup(); if (t) clearTimeout(t); };
   }, []));
 
-  const getInitials = (name = '') => name.substring(0, 2).toUpperCase() || 'U';
-
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -79,6 +78,8 @@ export default function ChatListScreen({ navigation }) {
       : (usersMap[otherId]?.name || item.last?.fromName || 'Chat');
     const lastMsg = item.last;
     const unread = item.unread || 0;
+    // Show the person's profile picture when they have one; fall back to a monogram.
+    const avatar = isGroup ? null : photoUri(usersMap[otherId]?.avatar);
 
     return (
       <TouchableOpacity
@@ -93,8 +94,10 @@ export default function ChatListScreen({ navigation }) {
         <View style={[styles.avatar, isGroup && styles.groupAvatar]}>
           {isGroup ? (
             <Ionicons name="people" size={22} color="#fff" />
+          ) : avatar ? (
+            <Image source={{ uri: avatar }} style={styles.avatarImage} />
           ) : (
-            <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
+            <Text style={styles.avatarText}>{initialsOf(displayName)}</Text>
           )}
         </View>
         <View style={styles.cardContent}>
@@ -171,6 +174,7 @@ const styles = StyleSheet.create({
     marginRight: Theme.spacing.m,
   },
   groupAvatar: { backgroundColor: '#8B5CF6' },
+  avatarImage: { width: 50, height: 50, borderRadius: 25 },
   avatarText: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: Theme.typography.sizes.m,

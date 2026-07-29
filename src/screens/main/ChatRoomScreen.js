@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { chatApi, usersApi } from '../../api';
+import { photoUri, initialsOf } from '../../utils/avatar';
 import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
@@ -756,9 +757,11 @@ export default function ChatRoomScreen({ route, navigation }) {
                     return (
                       <View style={styles.memberRow}>
                         <View style={styles.memberAvatar}>
-                          <Text style={styles.memberAvatarText}>
-                            {(item.name || 'U').substring(0, 2).toUpperCase()}
-                          </Text>
+                          {photoUri(item.avatar) ? (
+                            <Image source={{ uri: photoUri(item.avatar) }} style={styles.memberAvatarImage} />
+                          ) : (
+                            <Text style={styles.memberAvatarText}>{initialsOf(item.name)}</Text>
+                          )}
                         </View>
                         <View style={styles.memberInfo}>
                           <Text style={styles.memberName}>
@@ -829,9 +832,11 @@ export default function ChatRoomScreen({ route, navigation }) {
                         {sel && <Ionicons name="checkmark" size={16} color="#fff" />}
                       </View>
                       <View style={styles.memberAvatar}>
-                        <Text style={styles.memberAvatarText}>
-                          {(item.name || 'U').substring(0, 2).toUpperCase()}
-                        </Text>
+                        {photoUri(item.avatar) ? (
+                          <Image source={{ uri: photoUri(item.avatar) }} style={styles.memberAvatarImage} />
+                        ) : (
+                          <Text style={styles.memberAvatarText}>{initialsOf(item.name)}</Text>
+                        )}
                       </View>
                       <View style={styles.memberInfo}>
                         <Text style={styles.memberName}>{item.name}</Text>
@@ -1130,7 +1135,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
+  memberAvatarImage: { width: 42, height: 42, borderRadius: 21 },
   memberAvatarText: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: 14,

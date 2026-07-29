@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ActivityIndicator, Alert,
+  TextInput, ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usersApi, chatApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
+import { photoUri, initialsOf } from '../../utils/avatar';
 import { Theme } from '../../theme/Theme';
 
 export default function NewChatScreen({ navigation }) {
@@ -35,7 +36,16 @@ export default function NewChatScreen({ navigation }) {
     })();
   }, []);
 
-  const getInitials = (name = '') => name.substring(0, 2).toUpperCase() || 'U';
+  // Profile picture when the user has one, otherwise a monogram fallback.
+  const Avatar = ({ user: u }) => (
+    <View style={styles.avatar}>
+      {photoUri(u?.avatar) ? (
+        <Image source={{ uri: photoUri(u.avatar) }} style={styles.avatarImage} />
+      ) : (
+        <Text style={styles.avatarText}>{initialsOf(u?.name)}</Text>
+      )}
+    </View>
+  );
 
   const openChat = (u) => {
     navigation.replace('ChatRoom', { toId: u._id, chatName: u.name });
@@ -76,9 +86,7 @@ export default function NewChatScreen({ navigation }) {
     if (mode === 'dm') {
       return (
         <TouchableOpacity style={styles.row} onPress={() => openChat(item)}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
-          </View>
+          <Avatar user={item} />
           <View style={styles.info}>
             <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
             {item.role ? <Text style={styles.role}>{item.role}</Text> : null}
@@ -94,9 +102,7 @@ export default function NewChatScreen({ navigation }) {
         <View style={[styles.checkbox, sel && styles.checkboxActive]}>
           {sel && <Ionicons name="checkmark" size={16} color="#fff" />}
         </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
-        </View>
+        <Avatar user={item} />
         <View style={styles.info}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
           {item.role ? <Text style={styles.role}>{item.role}</Text> : null}
@@ -259,7 +265,9 @@ const styles = StyleSheet.create({
   avatar: {
     width: 46, height: 46, borderRadius: 23, backgroundColor: Theme.colors.primary,
     alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.m,
+    overflow: 'hidden',
   },
+  avatarImage: { width: 46, height: 46, borderRadius: 23 },
   avatarText: {
     fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m,
     fontWeight: Theme.typography.weights.bold, color: '#fff',
