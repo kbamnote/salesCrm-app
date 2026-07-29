@@ -99,6 +99,7 @@ const TAB_COMPONENTS = {
   TeamMap: TeamMapScreen,
   Onboarding: OnboardingScreen,
   Designs: DesignsScreen,
+  ChatList: ChatListScreen,
 };
 const DRAWER_COMPONENTS = {
   TeamMonitor: TeamMonitorScreen,
@@ -256,7 +257,7 @@ const ADMIN_DRAWER_SECTIONS = [
   { key: 'sales',      title: 'Sales',      icon: 'briefcase-outline', items: ['TeamMap', 'RouteHistory', 'TeamProgress', 'Targets', 'PresentationHistory', 'Designs'] },
   { key: 'telecaller', title: 'Telecaller', icon: 'headset-outline',   items: ['TelecallerDashboard', 'Calls', 'WhatsApp'] },
   { key: 'hr',         title: 'HR',         icon: 'people-outline',     items: ['HRDashboard', 'Onboarding', 'TeamManagement', 'Payroll', 'OfferLetter', 'Agreement', 'SendNotification'] },
-  { key: 'general',    title: 'General',    icon: 'apps-outline',       items: ['ChatList', 'MyPayslips'] },
+  { key: 'general',    title: 'General',    icon: 'apps-outline',       items: ['MyPayslips'] },
 ];
 
 // Sectioned (dropdown) drawer — admin only.

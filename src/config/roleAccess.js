@@ -20,6 +20,7 @@ export const TAB_DEFS = {
   TelecallerDashboard: { active: 'headset', inactive: 'headset-outline', label: 'Dashboard' },
   WhatsApp: { active: 'logo-whatsapp', inactive: 'logo-whatsapp', label: 'WhatsApp' },
   Calls: { active: 'call', inactive: 'call-outline', label: 'Calls' },
+  ChatList: { active: 'chatbubbles', inactive: 'chatbubbles-outline', label: 'Team Chat' },
 };
 
 // Drawer item title + icon.
@@ -62,16 +63,16 @@ export const DRAWER_DEFS = {
 
 // Field reps — the original/unchanged experience.
 const fieldRep = {
-  tabs: ['Dashboard', 'Leads', 'Clients', 'Profile'],
-  drawer: ['Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
+  tabs: ['Dashboard', 'Leads', 'Clients', 'ChatList', 'Profile'],
+  drawer: ['Attendance', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
 
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
-  tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'Profile'],
-  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'ChatList', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
+  tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'ChatList', 'Profile'],
+  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -83,8 +84,8 @@ export const ROLE_CONFIG = {
 
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
-    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
-    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'MyPayslips'],
+    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
+    drawer: ['Attendance', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
@@ -93,16 +94,16 @@ export const ROLE_CONFIG = {
   // fulfillment Data Collection & Kit Check stages, so she gets the Orders
   // section that regular telecallers don't see.
   assistant_hr: {
-    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'Profile'],
-    drawer: ['Attendance', 'Leave', 'Designs', 'ChatList', 'Fulfillment', 'MyPayslips'],
+    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
+    drawer: ['Attendance', 'Leave', 'Designs', 'Fulfillment', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
 
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
-    tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'Profile'],
-    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'ChatList', 'Designs', 'MyPayslips'],
+    tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'ChatList', 'Profile'],
+    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -114,12 +115,12 @@ export const ROLE_CONFIG = {
 
   // Admin — full access to every screen & capability in the app.
   admin: {
-    tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'Profile'],
+    tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'ChatList', 'Profile'],
     drawer: [
       'TeamManagement', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
-      'PresentationHistory', 'ChatList',
+      'PresentationHistory',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
     landing: 'Dashboard',
@@ -131,16 +132,16 @@ export const ROLE_CONFIG = {
 
   // Designer — mainly uses the web panel; minimal app. Owns the website stage.
   designer: {
-    tabs: ['Designs', 'Profile'],
-    drawer: ['Fulfillment', 'Attendance', 'Leave', 'ChatList', 'MyPayslips'],
+    tabs: ['Designs', 'ChatList', 'Profile'],
+    drawer: ['Fulfillment', 'Attendance', 'Leave', 'MyPayslips'],
     landing: 'Designs',
     can: {},
   },
 
   // Social media manager — sets up client socials (the conditional pipeline stage).
   social_media: {
-    tabs: ['Designs', 'Profile'],
-    drawer: ['Fulfillment', 'Attendance', 'Leave', 'ChatList', 'MyPayslips'],
+    tabs: ['Designs', 'ChatList', 'Profile'],
+    drawer: ['Fulfillment', 'Attendance', 'Leave', 'MyPayslips'],
     landing: 'Designs',
     can: {},
   },
