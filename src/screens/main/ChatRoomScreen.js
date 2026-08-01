@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { chatApi, usersApi } from '../../api';
 import { photoUri, initialsOf } from '../../utils/avatar';
+import LinkedText from '../../components/LinkedText';
 import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
@@ -556,9 +557,12 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
 
     return (
-      <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>
+      <LinkedText
+        style={[styles.bubbleText, isMine && styles.bubbleTextMine]}
+        linkStyle={isMine ? styles.linkMine : styles.link}
+      >
         {item.content}
-      </Text>
+      </LinkedText>
     );
   };
 
@@ -944,6 +948,9 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   bubbleTextMine: { color: '#fff' },
+  // Links: underlined, and tinted so they stay legible on either bubble colour.
+  link: { color: '#1D4ED8', textDecorationLine: 'underline' },
+  linkMine: { color: '#fff', textDecorationLine: 'underline', fontWeight: '700' },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
