@@ -88,8 +88,7 @@ export default function CloseDealScreen({ navigation }) {
   // (logo, socials, product list…) is collected from the customer later through
   // the public onboarding form, so the rep isn't asked for it at signing time.
   const [basic, setBasic] = useState({
-    companyName: '', ownerName: '', contactNo: '', whatsapp: '',
-    gst: '', address: '', email: '',
+    companyName: '', ownerName: '', contactNo: '',
   });
   const setB = (k, v) => setBasic((p) => ({ ...p, [k]: v }));
 
@@ -213,7 +212,6 @@ export default function CloseDealScreen({ navigation }) {
         prefill: {
           name: (basic.ownerName || basic.companyName || '').trim(),
           contact: basic.contactNo.trim(),
-          email: basic.email.trim(),
         },
         theme: { color: Theme.colors.primary },
       });
@@ -259,10 +257,8 @@ export default function CloseDealScreen({ navigation }) {
         // filled in by the customer through the public onboarding form.
         const onboarding = {
           companyName: basic.companyName.trim(), ownerName: basic.ownerName.trim(), contactNo: basic.contactNo.trim(),
-          whatsapp: basic.whatsapp.trim(), gst: basic.gst.trim(), address: basic.address.trim(), email: basic.email.trim(),
           businessName: basic.companyName.trim(), contactPerson: basic.ownerName.trim(),
-          businessPhone: basic.contactNo.trim(), businessEmail: basic.email.trim(),
-          businessWhatsapp: basic.whatsapp.trim(),
+          businessPhone: basic.contactNo.trim(),
           hasGoogleBusiness: hasGoogleBusiness === true, hasInstagram: hasInstagram === true,
         };
 
@@ -270,9 +266,6 @@ export default function CloseDealScreen({ navigation }) {
           name: basic.ownerName.trim() || basic.companyName.trim(),
           company: basic.companyName.trim(),
           phone: basic.contactNo.trim(),
-          email: basic.email.trim(),
-          address: basic.address.trim(),
-          gst: basic.gst.trim(),
         };
 
         const dealAmount = Number(pay.dealAmount) || 0;
@@ -340,12 +333,9 @@ export default function CloseDealScreen({ navigation }) {
           <Field label="Business / Company Name *" value={basic.companyName} onChange={(v) => setB('companyName', v)} />
           <Field label="Owner / Contact Person *" value={basic.ownerName} onChange={(v) => setB('ownerName', v)} />
           <Field label="Contact No. *" value={basic.contactNo} onChange={(v) => setB('contactNo', v)} keyboardType="phone-pad" />
-          <Field label="WhatsApp No." value={basic.whatsapp} onChange={(v) => setB('whatsapp', v)} keyboardType="phone-pad" />
-          <Field label="Email ID" value={basic.email} onChange={(v) => setB('email', v)} keyboardType="email-address" autoCap="none" />
-          <Field label="Address" value={basic.address} onChange={(v) => setB('address', v)} multiline />
-          <Field label="GST No." value={basic.gst} onChange={(v) => setB('gst', v)} autoCap="characters" />
           <Text style={styles.hintNote}>
-            Logo, socials and product details are collected from the customer later
+            The customer's email is asked on the next screen when their card is created.
+            Address, GST, logo, socials and product details come from the customer
             through their onboarding link.
           </Text>
         </View>
