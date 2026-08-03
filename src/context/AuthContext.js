@@ -6,6 +6,10 @@ import { registerForPush, unregisterPush } from '../services/notifications';
 
 const AuthContext = createContext(null);
 
+// Last known user, cached so the app can open already signed-in when the very
+// first request after a cold start / app update can't reach the server yet.
+const USER_KEY = 'authUser';
+
 // Normalize the user object — backends sometimes wrap it, sometimes don't
 const extractUser = (data) => {
   if (!data) return null;
@@ -21,7 +25,7 @@ export function AuthProvider({ children }) {
   // e.g. the account was deactivated). Used by the 401 interceptor.
   const forceLogout = async () => {
     try { await stopBackgroundTracking(); } catch (e) {}
-    try { await AsyncStorage.removeItem('token'); } catch (e) {}
+    try { await AsyncStorage.multiRemove(['token', USER_KEY]); } catch (e) {}
     setUser(null);
   };
 
@@ -34,14 +38,33 @@ export function AuthProvider({ children }) {
   const checkToken = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      if (token) {
+      if (!token) return;                       // never signed in on this device
+
+      // Open with the cached user so a slow/unreachable first request doesn't
+      // bounce the user to Login (this is what logged people out after an app
+      // update: the very first call could fail while the network/DNS settled).
+      let cached = null;
+      try { cached = JSON.parse(await AsyncStorage.getItem(USER_KEY)); } catch (_) {}
+      if (cached) setUser(cached);
+
+      try {
         const r = await authApi.me();
-        setUser(extractUser(r.data));
+        const fresh = extractUser(r.data);
+        setUser(fresh);
+        AsyncStorage.setItem(USER_KEY, JSON.stringify(fresh)).catch(() => {});
         registerForPush().then(({ error }) => { if (error) console.log('[Push] restore session register:', error); });
+      } catch (e) {
+        // A real 401 is already handled by the response interceptor (it clears
+        // the token and calls forceLogout). Everything else — offline, timeout,
+        // 5xx, DNS not resolved yet — is transient, so KEEP the session rather
+        // than deleting a perfectly valid token.
+        if (e?.response?.status !== 401) {
+          console.log('[Auth] keeping session, could not refresh user:', e.message);
+          if (cached) {
+            registerForPush().then(({ error }) => { if (error) console.log('[Push] offline restore:', error); });
+          }
+        }
       }
-    } catch (e) {
-      console.log('Failed to restore token', e);
-      await AsyncStorage.removeItem('token');
     } finally {
       setLoading(false);
     }
@@ -49,8 +72,10 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const r = await authApi.login({ email, password });
+    const u = extractUser(r.data);
     await AsyncStorage.setItem('token', r.data.token);
-    setUser(extractUser(r.data));
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(u)).catch(() => {});
+    setUser(u);
     registerForPush().then(({ error }) => { if (error) console.log('[Push] login register:', error); });
   };
 
@@ -58,7 +83,9 @@ export function AuthProvider({ children }) {
   const refreshUser = async () => {
     try {
       const r = await authApi.me();
-      setUser(extractUser(r.data));
+      const u = extractUser(r.data);
+      setUser(u);
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(u)).catch(() => {});
     } catch (e) {
       console.log('Failed to refresh user', e);
     }
@@ -70,7 +97,7 @@ export function AuthProvider({ children }) {
     // location service + notifications.
     await stopBackgroundTracking();
     await unregisterPush();
-    await AsyncStorage.removeItem('token');
+    await AsyncStorage.multiRemove(['token', USER_KEY]);
     setUser(null);
   };
 
