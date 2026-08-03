@@ -4,7 +4,6 @@ import {
   ActivityIndicator, Alert, Image, Platform, KeyboardAvoidingView, Keyboard, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,10 +15,9 @@ import { Theme } from '../../theme/Theme';
 const CLOUD_NAME = 'dpreeciaf';
 const UPLOAD_PRESET = 'salescrm_attendance';
 
-const STEPS = ['Basic', 'Business', 'Cart', 'Payment'];
 const SOCIALS = ['Google', 'Instagram', 'Facebook', 'WhatsApp', 'YouTube', 'LinkedIn', 'Website'];
 
-// Page 3 cart items (quantities only — no prices).
+// Cart items (quantities only — no prices).
 const CART = [
   { key: 'nfc_card', name: 'NFC Business Card' },
   { key: 'ai_review_card', name: 'AI NFC Review Card' },
@@ -44,7 +42,6 @@ export default function CloseDealScreen({ navigation }) {
   const scrollRef = useRef(null);
   const scrollYRef = useRef(0);
   const { height: winH } = useWindowDimensions();
-  const [step, setStep] = useState(1);
 
   // Extra scroll room appears ONLY while the keyboard is open (so there's no
   // permanent empty gap at the bottom). Sized to the actual keyboard height.
@@ -85,30 +82,26 @@ export default function CloseDealScreen({ navigation }) {
   const closedRef = useRef(null); // { meetingId, client, amount } once the deal is created
   const paidRef = useRef(0);      // amount already recorded via addPayment
 
-  // Page 1 — basic
+  // Customer details. The separate "Business" page used to repeat these five
+  // fields; the backend already falls back to these, so they're captured once
+  // here and mapped across in submit(). Everything else about the business
+  // (logo, socials, product list…) is collected from the customer later through
+  // the public onboarding form, so the rep isn't asked for it at signing time.
   const [basic, setBasic] = useState({
     companyName: '', ownerName: '', contactNo: '', whatsapp: '',
-    gst: '', address: '', dob: '', email: '',
+    gst: '', address: '', email: '',
   });
-  const [showDob, setShowDob] = useState(false);
   const setB = (k, v) => setBasic((p) => ({ ...p, [k]: v }));
 
-  // Page 2 — business
-  const [biz, setBiz] = useState({
-    businessName: '', contactPerson: '', googleReviewLink: '', logoUrl: '',
-    businessPhone: '', email: '', instagram: '', whatsapp: '', productServiceList: '',
-  });
-  const [logoUploading, setLogoUploading] = useState(false);
-  const setBz = (k, v) => setBiz((p) => ({ ...p, [k]: v }));
-
-  // Page 3 — cart
+  // Cart
   const [qty, setQty] = useState({ nfc_card: 0, ai_review_card: 0, standee: 0, keychain: 0, sticker: 0 });
   const [standeeQr, setStandeeQr] = useState('2');
   const [standeeSocials, setStandeeSocials] = useState([]);
   const [stickerSocials, setStickerSocials] = useState([]);
+  // These two decide whether the order needs a social-media setup stage
+  // (see backend services/fulfillment.js) — keep them.
   const [hasGoogleBusiness, setHasGoogleBusiness] = useState(null);
   const [hasInstagram, setHasInstagram] = useState(null);
-  const [titaniumCard, setTitaniumCard] = useState(false);
 
   const inc = (k) => setQty((p) => ({ ...p, [k]: (p[k] || 0) + 1 }));
   const dec = (k) => setQty((p) => ({ ...p, [k]: Math.max(0, (p[k] || 0) - 1) }));
@@ -168,50 +161,30 @@ export default function CloseDealScreen({ navigation }) {
     }
   };
 
-  const validateStep = () => {
-    if (step === 1) {
-      if (!basic.ownerName.trim() && !basic.companyName.trim()) {
-        Alert.alert('Required', 'Enter the company or owner name.'); return false;
-      }
-      if (!basic.contactNo.trim()) { Alert.alert('Required', 'Contact number is required.'); return false; }
+  // Single-page form, so everything is validated together on submit.
+  const validate = () => {
+    if (!basic.ownerName.trim() && !basic.companyName.trim()) {
+      Alert.alert('Required', 'Enter the business or owner name.'); return false;
     }
-    if (step === 4) {
-      if (!(Number(pay.dealAmount) > 0)) { Alert.alert('Deal amount', 'Enter a valid deal amount.'); return false; }
-      if (pay.mode === 'pdc' && Number(pay.collectNow) > 0 && !pay.pdcImageUrl) {
-        Alert.alert('PDC photo', 'Please upload a photo of the PDC cheque.'); return false;
-      }
-      if (pay.mode === 'razorpay' && !(Number(pay.collectNow) > 0)) {
-        Alert.alert('Amount to collect', 'Enter an amount to collect via Razorpay, or choose another payment mode.'); return false;
-      }
+    if (!basic.contactNo.trim()) { Alert.alert('Required', 'Contact number is required.'); return false; }
+    if (!(Number(pay.dealAmount) > 0)) { Alert.alert('Deal amount', 'Enter a valid deal amount.'); return false; }
+    if (pay.mode === 'pdc' && Number(pay.collectNow) > 0 && !pay.pdcImageUrl) {
+      Alert.alert('PDC photo', 'Please upload a photo of the PDC cheque.'); return false;
+    }
+    if (pay.mode === 'razorpay' && !(Number(pay.collectNow) > 0)) {
+      Alert.alert('Amount to collect', 'Enter an amount to collect via Razorpay, or choose another payment mode.'); return false;
     }
     return true;
   };
 
-  const next = () => {
-    if (!validateStep()) return;
-    // Moving Basic → Business: carry over the fields that are the same, only
-    // filling ones the rep hasn't already typed on the Business page.
-    if (step === 1) {
-      setBiz((p) => ({
-        ...p,
-        businessName: p.businessName || basic.companyName,
-        contactPerson: p.contactPerson || basic.ownerName,
-        businessPhone: p.businessPhone || basic.contactNo,
-        whatsapp: p.whatsapp || basic.whatsapp,
-        email: p.email || basic.email,
-      }));
-    }
-    if (step < 4) setStep(step + 1);
-    else submit();
-  };
+  const onCloseDeal = () => { if (validate()) submit(); };
+
   const back = () => {
-    if (step > 1) { setStep(step - 1); return; }
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Root');
   };
 
-  // Always show a header back arrow: it steps back through the wizard and
-  // reliably exits the flow from the first page.
+  // Always show a header back arrow that reliably exits the flow.
   useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
@@ -220,7 +193,7 @@ export default function CloseDealScreen({ navigation }) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, step]);
+  }, [navigation]);
 
   // Opens Razorpay Standard Checkout on the rep's phone for the given amount,
   // then verifies the completed payment against the deal. Never throws — a
@@ -280,13 +253,17 @@ export default function CloseDealScreen({ navigation }) {
           return { name: c.name, qty: qty[c.key], ...(Object.keys(options).length ? { options } : {}) };
         });
 
+        // The rep now enters each detail once. The business-* keys are still sent
+        // (mirrored from the same values) because the Tapify card builder and the
+        // customer prefill form read them; the fields we no longer ask for are
+        // filled in by the customer through the public onboarding form.
         const onboarding = {
           companyName: basic.companyName.trim(), ownerName: basic.ownerName.trim(), contactNo: basic.contactNo.trim(),
-          whatsapp: basic.whatsapp.trim(), gst: basic.gst.trim(), address: basic.address.trim(), dob: basic.dob, email: basic.email.trim(),
-          businessName: biz.businessName.trim(), contactPerson: biz.contactPerson.trim(), googleReviewLink: biz.googleReviewLink.trim(),
-          logoUrl: biz.logoUrl, businessPhone: biz.businessPhone.trim(), businessEmail: biz.email.trim(),
-          instagram: biz.instagram.trim(), businessWhatsapp: biz.whatsapp.trim(), productServiceList: biz.productServiceList.trim(),
-          hasGoogleBusiness: hasGoogleBusiness === true, hasInstagram: hasInstagram === true, titaniumCard,
+          whatsapp: basic.whatsapp.trim(), gst: basic.gst.trim(), address: basic.address.trim(), email: basic.email.trim(),
+          businessName: basic.companyName.trim(), contactPerson: basic.ownerName.trim(),
+          businessPhone: basic.contactNo.trim(), businessEmail: basic.email.trim(),
+          businessWhatsapp: basic.whatsapp.trim(),
+          hasGoogleBusiness: hasGoogleBusiness === true, hasInstagram: hasInstagram === true,
         };
 
         const clientPayload = {
@@ -350,26 +327,6 @@ export default function CloseDealScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
     >
-      {/* Step progress */}
-      <View style={styles.progress}>
-        {STEPS.map((label, i) => {
-          const n = i + 1;
-          const done = n < step;
-          const active = n === step;
-          return (
-            <React.Fragment key={label}>
-              <View style={styles.progItem}>
-                <View style={[styles.progDot, active && styles.progDotActive, done && styles.progDotDone]}>
-                  {done ? <Ionicons name="checkmark" size={13} color="#fff" /> : <Text style={[styles.progNum, active && { color: '#fff' }]}>{n}</Text>}
-                </View>
-                <Text style={[styles.progLabel, active && { color: Theme.colors.primary, fontWeight: '800' }]}>{label}</Text>
-              </View>
-              {i < STEPS.length - 1 && <View style={[styles.progBar, done && { backgroundColor: Theme.colors.primary }]} />}
-            </React.Fragment>
-          );
-        })}
-      </View>
-
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -378,63 +335,24 @@ export default function CloseDealScreen({ navigation }) {
         onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
         scrollEventThrottle={16}
       >
-        {step === 1 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Basic Information</Text>
-            <Field label="Company Name" value={basic.companyName} onChange={(v) => setB('companyName', v)} />
-            <Field label="Owner Name" value={basic.ownerName} onChange={(v) => setB('ownerName', v)} />
-            <Field label="Contact No. *" value={basic.contactNo} onChange={(v) => setB('contactNo', v)} keyboardType="phone-pad" />
-            <Field label="WhatsApp No." value={basic.whatsapp} onChange={(v) => setB('whatsapp', v)} keyboardType="phone-pad" />
-            <Field label="GST No." value={basic.gst} onChange={(v) => setB('gst', v)} autoCap="characters" />
-            <Field label="Address" value={basic.address} onChange={(v) => setB('address', v)} multiline />
-            <Text style={styles.label}>Date of Birth</Text>
-            <TouchableOpacity style={styles.input} onPress={() => setShowDob(true)}>
-              <Text style={basic.dob ? styles.inputText : styles.placeholder}>{basic.dob || 'Select date'}</Text>
-            </TouchableOpacity>
-            {showDob && (
-              <DateTimePicker
-                value={basic.dob ? new Date(basic.dob) : new Date(2000, 0, 1)}
-                mode="date"
-                maximumDate={new Date()}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(e, d) => { setShowDob(false); if (e?.type !== 'dismissed' && d) setB('dob', d.toISOString().slice(0, 10)); }}
-              />
-            )}
-            <Field label="Email ID" value={basic.email} onChange={(v) => setB('email', v)} keyboardType="email-address" autoCap="none" />
-          </View>
-        )}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Customer</Text>
+          <Field label="Business / Company Name *" value={basic.companyName} onChange={(v) => setB('companyName', v)} />
+          <Field label="Owner / Contact Person *" value={basic.ownerName} onChange={(v) => setB('ownerName', v)} />
+          <Field label="Contact No. *" value={basic.contactNo} onChange={(v) => setB('contactNo', v)} keyboardType="phone-pad" />
+          <Field label="WhatsApp No." value={basic.whatsapp} onChange={(v) => setB('whatsapp', v)} keyboardType="phone-pad" />
+          <Field label="Email ID" value={basic.email} onChange={(v) => setB('email', v)} keyboardType="email-address" autoCap="none" />
+          <Field label="Address" value={basic.address} onChange={(v) => setB('address', v)} multiline />
+          <Field label="GST No." value={basic.gst} onChange={(v) => setB('gst', v)} autoCap="characters" />
+          <Text style={styles.hintNote}>
+            Logo, socials and product details are collected from the customer later
+            through their onboarding link.
+          </Text>
+        </View>
 
-        {step === 2 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Business Details</Text>
-            <Field label="Business Name" value={biz.businessName} onChange={(v) => setBz('businessName', v)} />
-            <Field label="Contact Person's Name" value={biz.contactPerson} onChange={(v) => setBz('contactPerson', v)} />
-            <Field label="Google Map / Review Link" value={biz.googleReviewLink} onChange={(v) => setBz('googleReviewLink', v)} autoCap="none" />
+        <View style={{ height: 14 }} />
 
-            <Text style={styles.label}>Business Logo (high-resolution)</Text>
-            <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage((url) => setBz('logoUrl', url), setLogoUploading)} disabled={logoUploading}>
-              {logoUploading ? (
-                <ActivityIndicator color={Theme.colors.primary} />
-              ) : biz.logoUrl ? (
-                <Image source={{ uri: biz.logoUrl }} style={styles.uploadPreview} resizeMode="contain" />
-              ) : (
-                <><Ionicons name="cloud-upload-outline" size={26} color={Theme.colors.primary} /><Text style={styles.uploadText}>Upload logo</Text></>
-              )}
-            </TouchableOpacity>
-            {biz.logoUrl && !logoUploading ? (
-              <TouchableOpacity onPress={() => pickImage((url) => setBz('logoUrl', url), setLogoUploading)}><Text style={styles.changeLink}>Change logo</Text></TouchableOpacity>
-            ) : null}
-
-            <Field label="Business Phone Number" value={biz.businessPhone} onChange={(v) => setBz('businessPhone', v)} keyboardType="phone-pad" />
-            <Field label="Email ID" value={biz.email} onChange={(v) => setBz('email', v)} keyboardType="email-address" autoCap="none" />
-            <Field label="Instagram Profile Link" value={biz.instagram} onChange={(v) => setBz('instagram', v)} autoCap="none" />
-            <Field label="WhatsApp Number" value={biz.whatsapp} onChange={(v) => setBz('whatsapp', v)} keyboardType="phone-pad" />
-            <Field label="Product / Service List" value={biz.productServiceList} onChange={(v) => setBz('productServiceList', v)} multiline />
-          </View>
-        )}
-
-        {step === 3 && (
-          <View style={styles.card}>
+        <View style={styles.card}>
             <Text style={styles.cardTitle}>Products</Text>
             {CART.map((c) => (
               <View key={c.key} style={styles.cartItem}>
@@ -505,16 +423,12 @@ export default function CloseDealScreen({ navigation }) {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.checkRow} onPress={() => setTitaniumCard((v) => !v)}>
-              <View style={[styles.checkbox, titaniumCard && styles.checkboxOn]}>{titaniumCard && <Ionicons name="checkmark" size={16} color="#fff" />}</View>
-              <Text style={styles.flagLabel}>Titanium Card</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        </View>
 
-        {step === 4 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Payment Collection</Text>
+        <View style={{ height: 14 }} />
+
+        <View style={styles.card}>
+            <Text style={styles.cardTitle}>Payment</Text>
 
             <Field label="Total Deal Amount (₹) *" value={pay.dealAmount} onChange={onDealAmount} keyboardType="numeric" />
 
@@ -562,23 +476,22 @@ export default function CloseDealScreen({ navigation }) {
                 )}
               </>
             )}
-          </View>
-        )}
+        </View>
       </ScrollView>
 
-      {/* Footer nav */}
+      {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <TouchableOpacity style={styles.backBtn} onPress={back} disabled={submitting}>
           <Ionicons name="chevron-back" size={18} color={Theme.colors.primary} />
-          <Text style={styles.backText}>{step === 1 ? 'Cancel' : 'Back'}</Text>
+          <Text style={styles.backText}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.nextBtn, submitting && { opacity: 0.7 }]} onPress={next} disabled={submitting}>
+        <TouchableOpacity style={[styles.nextBtn, submitting && { opacity: 0.7 }]} onPress={onCloseDeal} disabled={submitting}>
           {submitting ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Text style={styles.nextText}>{step === 4 ? 'Close Deal' : 'Next'}</Text>
-              <Ionicons name={step === 4 ? 'checkmark-circle' : 'chevron-forward'} size={18} color="#fff" />
+              <Text style={styles.nextText}>Close Deal</Text>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
             </>
           )}
         </TouchableOpacity>
@@ -640,6 +553,7 @@ const styles = StyleSheet.create({
   inputText: { fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.text },
   placeholder: { fontFamily: Theme.typography.fontFamily, fontSize: 14, color: Theme.colors.textSecondary },
   textarea: { height: 80, textAlignVertical: 'top' },
+  hintNote: { fontFamily: Theme.typography.fontFamily, fontSize: 11, color: Theme.colors.textSecondary, fontStyle: 'italic', marginTop: 12, lineHeight: 16 },
 
   // Upload
   uploadBox: { height: 120, borderRadius: 12, borderWidth: 1.5, borderColor: Theme.colors.border, borderStyle: 'dashed', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
