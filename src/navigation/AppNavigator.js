@@ -65,6 +65,7 @@ import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
 import FulfillmentListScreen from '../screens/main/FulfillmentListScreen';
 import FulfillmentDetailScreen from '../screens/main/FulfillmentDetailScreen';
 import TeamAttendanceScreen from '../screens/main/TeamAttendanceScreen';
+import LateStaffScreen from '../screens/main/LateStaffScreen';
 
 // Stack-only screens (detail pages)
 import AddLeadScreen from '../screens/main/AddLeadScreen';
@@ -137,6 +138,7 @@ const DRAWER_COMPONENTS = {
   TeamManagement: TeamMembersScreen,
   Fulfillment: FulfillmentListScreen,
   TeamAttendance: TeamAttendanceScreen,
+  LateStaff: LateStaffScreen,
 };
 
 // Drawer items whose screen renders its OWN header — suppress the drawer header

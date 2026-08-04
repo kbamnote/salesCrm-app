@@ -83,6 +83,10 @@ export const attendanceApi = {
   roster: (date) => api.get('/attendance/roster', { params: date ? { date } : {} }),
   // Admin/HR: every submitted daily report for a date (default today).
   reports: (date) => api.get('/attendance/reports', { params: date ? { date } : {} }),
+  // Configured shift timings + grace (for display + lateness rules).
+  shift: () => api.get('/attendance/shift'),
+  // Oversight: who was late / left early and how often, for a month (YYYY-MM).
+  lateStaff: (month) => api.get('/attendance/late-staff', { params: { month } }),
 };
 
 export const fieldVisitsApi = {

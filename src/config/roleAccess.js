@@ -58,6 +58,7 @@ export const DRAWER_DEFS = {
   SalesPresentation:   { title: 'Sales Presentation', icon: 'easel-outline' },
   Fulfillment:         { title: 'Orders',           icon: 'cube-outline' },
   TeamAttendance:      { title: 'Team Attendance',  icon: 'clipboard-outline' },
+  LateStaff:           { title: 'Late Staff',       icon: 'alarm-outline' },
 };
 
 // ───── Role presets ─────
@@ -73,7 +74,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'ChatList', 'Profile'],
-  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
+  drawer: ['TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'LateStaff', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -104,7 +105,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'ChatList', 'Profile'],
-    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'TeamAttendance', 'Leave', 'Designs', 'MyPayslips'],
+    drawer: ['NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'TeamAttendance', 'LateStaff', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -122,7 +123,7 @@ export const ROLE_CONFIG = {
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'Attendance',
-      'PresentationHistory', 'TeamAttendance',
+      'PresentationHistory', 'TeamAttendance', 'LateStaff',
       'TelecallerDashboard', 'WhatsApp', 'MyPayslips',
     ],
     landing: 'Dashboard',

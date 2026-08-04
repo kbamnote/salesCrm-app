@@ -52,6 +52,11 @@ export default function AttendanceScreen() {
   const [showDisclosure, setShowDisclosure] = useState(false);
   const bgConsentRef = useRef(null); // 'accepted' | 'declined' | null
 
+  // Shift timings + late/early popups (from config/shift.js on the backend).
+  const [shift, setShift] = useState(null);         // { start, end, graceMin }
+  const [lateInfo, setLateInfo] = useState(null);   // { minutes, time } — "You're late"
+  const [earlyInfo, setEarlyInfo] = useState(null); // { minutes, time } — "Leaving early"
+
   // Mandatory daily report — collected before the punch-out camera step.
   // Format depends on the user's role (field report vs calling report).
   const { user } = useAuth();
@@ -124,12 +129,14 @@ export default function AttendanceScreen() {
   const loadData = async () => {
     try {
       const month = new Date().toISOString().substring(0, 7);
-      const [todayRes, monthRes] = await Promise.allSettled([
+      const [todayRes, monthRes, shiftRes] = await Promise.allSettled([
         attendanceApi.today(),
         attendanceApi.my(month),
+        attendanceApi.shift(),
       ]);
       if (todayRes.status === 'fulfilled') setTodayRecord(todayRes.value.data);
       if (monthRes.status === 'fulfilled') setMonthlyLogs(monthRes.value.data || []);
+      if (shiftRes.status === 'fulfilled') setShift(shiftRes.value.data);
     } catch (e) {
       console.log('Error loading attendance', e);
     } finally {
@@ -296,7 +303,8 @@ export default function AttendanceScreen() {
       };
 
       if (type === 'in') {
-        await attendanceApi.punchIn(payload);
+        const punchRes = await attendanceApi.punchIn(payload);
+        const lateMin = punchRes?.data?.lateMinutes || 0;
         // Seed the admin map immediately with location + area (background pings
         // that follow are coordinate-only to save battery/network).
         locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'active' })
@@ -314,16 +322,27 @@ export default function AttendanceScreen() {
             );
           }
         }
-        Alert.alert('✅ Punched In!', `Location & selfie captured at ${new Date().toLocaleTimeString()}`);
+        if (lateMin > 0) {
+          // Late popup — the server counted lateness past the grace window.
+          setLateInfo({ minutes: lateMin, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        } else {
+          Alert.alert('✅ Punched In!', `Location & selfie captured at ${new Date().toLocaleTimeString()}`);
+        }
       } else {
         // Attach the mandatory daily report captured before the camera step.
-        await attendanceApi.punchOut({ ...payload, report: pendingReportRef.current });
+        const punchRes = await attendanceApi.punchOut({ ...payload, report: pendingReportRef.current });
         pendingReportRef.current = null;
+        const earlyMin = punchRes?.data?.earlyMinutes || 0;
         // Stop tracking and mark them offline on the admin map once the shift ends.
         await stopBackgroundTracking();
         locationsApi.update({ lat: locData.lat, lng: locData.lng, area: locData.address, status: 'offline' })
           .catch((err) => console.log('Final location update failed', err?.message || err));
-        Alert.alert('👋 Punched Out!', `See you tomorrow! Time: ${new Date().toLocaleTimeString()}`);
+        if (earlyMin > 0) {
+          // Early-leaving popup — punched out before the shift end.
+          setEarlyInfo({ minutes: earlyMin, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        } else {
+          Alert.alert('👋 Punched Out!', `See you tomorrow! Time: ${new Date().toLocaleTimeString()}`);
+        }
       }
       loadData();
     } catch (e) {
@@ -399,6 +418,12 @@ export default function AttendanceScreen() {
       <View style={styles.todayCard}>
         <Text style={styles.todayTitle}>Today's Attendance</Text>
         <Text style={styles.todayDate}>{new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+        {shift && (
+          <View style={styles.shiftRow}>
+            <Ionicons name="time-outline" size={13} color={Theme.colors.textSecondary} />
+            <Text style={styles.shiftText}>Shift: {shift.start} – {shift.end}</Text>
+          </View>
+        )}
 
         <View style={styles.timesRow}>
           <View style={styles.timeBlock}>
@@ -581,6 +606,51 @@ export default function AttendanceScreen() {
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+    </Modal>
+
+    {/* Late / early-leaving popup — shown right after the punch when the server
+        flagged the employee as late or leaving before the shift end. */}
+    <Modal
+      visible={!!lateInfo || !!earlyInfo}
+      transparent
+      animationType="fade"
+      onRequestClose={() => { setLateInfo(null); setEarlyInfo(null); }}
+    >
+      <View style={styles.alertOverlay}>
+        <View style={styles.alertSheet}>
+          {lateInfo ? (
+            <>
+              <View style={[styles.alertIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="alarm-outline" size={34} color="#92400E" />
+              </View>
+              <Text style={styles.alertTitle}>You're Late!</Text>
+              <Text style={styles.alertMsg}>
+                You punched in at {lateInfo.time}.{'\n'}
+                You are <Text style={styles.alertBold}>{lateInfo.minutes} minute{lateInfo.minutes === 1 ? '' : 's'} late</Text>
+                {'\n'}Shift starts at {shift?.start || '10:30 AM'}.
+              </Text>
+            </>
+          ) : earlyInfo ? (
+            <>
+              <View style={[styles.alertIcon, { backgroundColor: '#DBEAFE' }]}>
+                <Ionicons name="time-outline" size={34} color="#1E3A8A" />
+              </View>
+              <Text style={styles.alertTitle}>Leaving Early</Text>
+              <Text style={styles.alertMsg}>
+                You punched out at {earlyInfo.time}.{'\n'}
+                You are <Text style={styles.alertBold}>{earlyInfo.minutes} minute{earlyInfo.minutes === 1 ? '' : 's'} early</Text>
+                {'\n'}Your shift ends at {shift?.end || '7:00 PM'}.
+              </Text>
+            </>
+          ) : null}
+          <TouchableOpacity
+            style={styles.alertBtn}
+            onPress={() => { setLateInfo(null); setEarlyInfo(null); }}
+          >
+            <Text style={styles.alertBtnText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </Modal>
     </>
   );
@@ -846,4 +916,56 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.error, borderRadius: 12, paddingVertical: 14, marginTop: 22,
   },
   reportSubmitText: { fontFamily: Theme.typography.fontFamily, fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Shift timing row on the today card
+  shiftRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#F8FAFC', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  shiftText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12, fontWeight: '700', color: Theme.colors.textSecondary,
+  },
+
+  // Late / early-leaving popup
+  alertOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center', alignItems: 'center', padding: 28,
+  },
+  alertSheet: {
+    width: '100%', maxWidth: 340,
+    backgroundColor: '#fff', borderRadius: 20, padding: 26,
+    alignItems: 'center', elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 12,
+  },
+  alertIcon: {
+    width: 68, height: 68, borderRadius: 34,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  alertTitle: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 20, fontWeight: '800', color: Theme.colors.text,
+    marginBottom: 8,
+  },
+  alertMsg: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 14, color: Theme.colors.textSecondary,
+    textAlign: 'center', lineHeight: 22, marginBottom: 20,
+  },
+  alertBold: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 15, fontWeight: '800', color: Theme.colors.text,
+  },
+  alertBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: Theme.colors.primary, borderRadius: 12,
+    paddingVertical: 13, alignItems: 'center',
+  },
+  alertBtnText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 15, fontWeight: '700', color: '#fff',
+  },
 });
