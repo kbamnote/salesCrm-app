@@ -20,7 +20,8 @@
     "production": {
       "ios": {
         "appleId": "abid.printworld@gmail.com",
-        "appleTeamId": "8SU93Y2VSB"
+        "appleTeamId": "8SU93Y2VSB",
+        "ascAppId": "6798988187"
       }
     }
   }
