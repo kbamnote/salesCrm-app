@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.kbamnote.salesTapify",
       "config": {
         "usesNonExemptEncryption": false
       },

@@ -9,13 +9,20 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": { "simulator": false }
     },
     "production": {
       "autoIncrement": true
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL",
+        "ascAppId": "REPLACE_AFTER_FIRST_SUBMIT",
+        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+      }
+    }
   }
 }
