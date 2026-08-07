@@ -60,6 +60,8 @@ import LeaveScreen from '../screens/main/LeaveScreen';
 import DailyReportsScreen from '../screens/main/DailyReportsScreen';
 import NewClientsScreen from '../screens/main/NewClientsScreen';
 import CampaignLeadsScreen from '../screens/main/CampaignLeadsScreen';
+import DialPadScreen from '../screens/main/DialPadScreen';
+import CallFunnelScreen from '../screens/main/CallFunnelScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
 import SalesPresentationScreen from '../screens/main/SalesPresentationScreen';
 import FulfillmentListScreen from '../screens/main/FulfillmentListScreen';
@@ -133,6 +135,8 @@ const DRAWER_COMPONENTS = {
   DailyReports: DailyReportsScreen,
   NewClients: NewClientsScreen,
   CampaignLeads: CampaignLeadsScreen,
+  DialPad: DialPadScreen,
+  CallFunnel: CallFunnelScreen,
   Support: SupportRequestsScreen,
   SalesPresentation: SalesPresentationScreen,
   TeamManagement: TeamMembersScreen,

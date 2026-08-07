@@ -234,6 +234,14 @@ export const callsApi = {
   logLead: (data) => api.post('/calls/log-lead', data),
 };
 
+// Call funnel — appointments booked by a calling role, routed by HR to sales.
+export const callAppointmentsApi = {
+  list: (params) => api.get('/call-appointments', { params }),
+  create: (data) => api.post('/call-appointments', data),
+  salesUsers: () => api.get('/call-appointments/sales-users'),
+  assign: (id, userId) => api.post(`/call-appointments/${id}/assign`, { userId }),
+};
+
 export const telecallerDashApi = {
   stats: () => api.get('/telecaller-dashboard/stats'),
 };
