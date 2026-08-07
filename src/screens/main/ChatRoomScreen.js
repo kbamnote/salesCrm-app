@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Alert, Image, Modal, Dimensions,
+  Alert, Image, Modal, Dimensions, Clipboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,9 @@ import { Audio } from 'expo-av';
 import { chatApi, usersApi } from '../../api';
 import { photoUri, initialsOf } from '../../utils/avatar';
 import LinkedText from '../../components/LinkedText';
+
+// Quick-reaction emojis offered on long-press (same set WhatsApp defaults to).
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 import SocketService from '../../services/location/SocketService';
 import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
@@ -57,6 +60,12 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
+  // WhatsApp-style message actions: long-press a bubble to react / reply / copy.
+  const [actionMsg, setActionMsg] = useState(null);   // message the sheet is open for
+  const [replyTo, setReplyTo] = useState(null);       // message being replied to
+  // @mention autocomplete (groups only).
+  const [mentionQuery, setMentionQuery] = useState(null); // null = picker closed
+  const mentionedRef = useRef([]);                    // ids @mentioned in the draft
   const flatListRef = useRef(null);
 
   const [recording, setRecording] = useState(null);
@@ -279,6 +288,7 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (!chatId) return undefined;
     let unsubMsg = null;
     let unsubRead = null;
+    let unsubReaction = null;
     (async () => {
       await SocketService.connect();
       unsubMsg = SocketService.onChat((m) => {
@@ -298,8 +308,17 @@ export default function ChatRoomScreen({ route, navigation }) {
           return { ...m, readBy: [...readBy, String(data.readerId)], read: true };
         }));
       });
+      unsubReaction = SocketService.onChatReaction((data) => {
+        if (String(data.chatId) !== String(chatId)) return;
+        setMessages((prev) => prev.map((m) =>
+          String(m._id) === String(data._id) ? { ...m, reactions: data.reactions } : m));
+      });
     })();
-    return () => { if (unsubMsg) unsubMsg(); if (unsubRead) unsubRead(); };
+    return () => {
+      if (unsubMsg) unsubMsg();
+      if (unsubRead) unsubRead();
+      if (unsubReaction) unsubReaction();
+    };
   }, [chatId, myId, upsertMessage]);
 
   // Real-time group changes: if this group is renamed or its members change,
@@ -352,20 +371,84 @@ export default function ChatRoomScreen({ route, navigation }) {
   const handleSend = async () => {
     if (!text.trim()) return;
     const msgText = text.trim();
+    const quoted = replyTo;
+    // Only keep mentions whose @name still appears in the text the user sent.
+    const mentions = mentionedRef.current
+      .filter((m) => msgText.includes(`@${m.name}`))
+      .map((m) => m.id);
     setText('');
+    setReplyTo(null);
+    setMentionQuery(null);
+    mentionedRef.current = [];
     setSending(true);
     try {
       const payload = isGroup ? { groupId, content: msgText } : { toId, content: msgText };
+      if (quoted?._id) payload.replyTo = quoted._id;
+      if (mentions.length) payload.mentions = mentions;
       const sent = await chatApi.send(payload);
       if (sent?.data) upsertMessage(sent.data); // instant local echo (socket dedupes)
     } catch (e) {
       const errMsg = e.response?.data?.message || 'Failed to send message.';
       Alert.alert('Error', errMsg);
       setText(msgText);
+      setReplyTo(quoted);
     } finally {
       setSending(false);
     }
   };
+
+  // ── Message actions ───────────────────────────────────────────────────────
+  const copyMessage = (m) => {
+    // RN core Clipboard is deprecation-warned but still functional, and needs no
+    // native module — so this ships as a JS-only update.
+    Clipboard.setString(String(m?.content || ''));
+    setActionMsg(null);
+    Alert.alert('Copied', 'Message copied to clipboard.');
+  };
+
+  const toggleReaction = async (m, emoji) => {
+    setActionMsg(null);
+    // Optimistic: reflect it immediately, then let the server/socket confirm.
+    setMessages((prev) => prev.map((x) => {
+      if (String(x._id) !== String(m._id)) return x;
+      const rest = (x.reactions || []).filter((r) => String(r.userId) !== myId);
+      const mine = (x.reactions || []).find((r) => String(r.userId) === myId);
+      return { ...x, reactions: mine && mine.emoji === emoji ? rest : [...rest, { userId: myId, emoji }] };
+    }));
+    try {
+      const res = await chatApi.react(m._id, emoji);
+      if (res?.data) {
+        setMessages((prev) => prev.map((x) =>
+          String(x._id) === String(res.data._id) ? { ...x, reactions: res.data.reactions } : x));
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not add the reaction.');
+    }
+  };
+
+  // ── @mentions (groups only) ───────────────────────────────────────────────
+  const onChangeText = (v) => {
+    setText(v);
+    if (!isGroup) return;
+    // Open the picker while typing an @word at the caret (end of the text).
+    const m = v.match(/@([\w]*)$/);
+    setMentionQuery(m ? m[1].toLowerCase() : null);
+  };
+
+  const applyMention = (u) => {
+    const name = u.name || '';
+    setText((prev) => prev.replace(/@([\w]*)$/, `@${name} `));
+    mentionedRef.current = [
+      ...mentionedRef.current.filter((x) => x.id !== String(u._id)),
+      { id: String(u._id), name },
+    ];
+    setMentionQuery(null);
+  };
+
+  const mentionOptions = mentionQuery === null ? [] : members
+    .filter((u) => String(u._id) !== myId)
+    .filter((u) => !mentionQuery || (u.name || '').toLowerCase().includes(mentionQuery))
+    .slice(0, 6);
 
   const pickImage = async () => {
     try {
@@ -571,16 +654,41 @@ export default function ChatRoomScreen({ route, navigation }) {
     const prevMsg = messages[index - 1];
     const showSender = !isMine && (!prevMsg || String(prevMsg.fromId) !== String(item.fromId));
 
+    const quoted = item.replyTo && typeof item.replyTo === 'object' ? item.replyTo : null;
+    // Collapse reactions to "emoji xN" pairs, like WhatsApp.
+    const reactionCounts = (item.reactions || []).reduce((acc, r) => {
+      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+      return acc;
+    }, {});
+    const reactionList = Object.entries(reactionCounts);
+
     return (
       <View style={[styles.msgWrapper, isMine ? styles.msgRight : styles.msgLeft]}>
         {showSender && (
           <Text style={styles.senderName}>{item.fromName || 'Unknown'}</Text>
         )}
-        <View style={[
-          styles.bubble,
-          isMine ? styles.bubbleMine : styles.bubbleOther,
-          (item.type === 'image') && styles.imageBubble,
-        ]}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onLongPress={() => setActionMsg(item)}
+          delayLongPress={250}
+          style={[
+            styles.bubble,
+            isMine ? styles.bubbleMine : styles.bubbleOther,
+            (item.type === 'image') && styles.imageBubble,
+          ]}
+        >
+          {quoted && (
+            <View style={[styles.quoteBox, isMine && styles.quoteBoxMine]}>
+              <Text style={[styles.quoteName, isMine && { color: '#fff' }]} numberOfLines={1}>
+                {quoted.fromName || 'Message'}
+              </Text>
+              <Text style={[styles.quoteText, isMine && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={2}>
+                {quoted.type === 'image' ? '📷 Photo'
+                  : quoted.type === 'voice' ? '🎤 Voice note'
+                  : (quoted.content || '')}
+              </Text>
+            </View>
+          )}
           {renderMessageContent(item, isMine)}
           <View style={styles.metaRow}>
             <Text style={[styles.bubbleTime, isMine && styles.bubbleTimeMine]}>
@@ -595,7 +703,18 @@ export default function ChatRoomScreen({ route, navigation }) {
               />
             )}
           </View>
-        </View>
+        </TouchableOpacity>
+
+        {reactionList.length > 0 && (
+          <View style={[styles.reactionRow, isMine ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
+            {reactionList.map(([emoji, count]) => (
+              <TouchableOpacity key={emoji} style={styles.reactionPill} onPress={() => toggleReaction(item, emoji)}>
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+                {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -634,6 +753,42 @@ export default function ChatRoomScreen({ route, navigation }) {
         </View>
       )}
 
+      {/* @mention suggestions (groups only) */}
+      {mentionOptions.length > 0 && (
+        <View style={styles.mentionBar}>
+          {mentionOptions.map((u) => (
+            <TouchableOpacity key={String(u._id)} style={styles.mentionRow} onPress={() => applyMention(u)}>
+              <View style={styles.mentionAvatar}>
+                {photoUri(u.avatar)
+                  ? <Image source={{ uri: photoUri(u.avatar) }} style={styles.mentionAvatarImg} />
+                  : <Text style={styles.mentionAvatarText}>{initialsOf(u.name)}</Text>}
+              </View>
+              <Text style={styles.mentionName}>{u.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Replying-to preview */}
+      {replyTo && (
+        <View style={styles.replyBar}>
+          <View style={styles.replyStripe} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.replyName} numberOfLines={1}>
+              Replying to {isMyMessage(replyTo) ? 'yourself' : (replyTo.fromName || 'message')}
+            </Text>
+            <Text style={styles.replyText} numberOfLines={1}>
+              {replyTo.type === 'image' ? '📷 Photo'
+                : replyTo.type === 'voice' ? '🎤 Voice note'
+                : (replyTo.content || '')}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close" size={20} color={Theme.colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {isRecording ? (
         <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TouchableOpacity style={styles.cancelRecordBtn} onPress={cancelRecording}>
@@ -657,7 +812,7 @@ export default function ChatRoomScreen({ route, navigation }) {
             placeholder="Type a message..."
             placeholderTextColor={Theme.colors.textSecondary}
             value={text}
-            onChangeText={setText}
+            onChangeText={onChangeText}
             multiline
             maxLength={1000}
             returnKeyType="send"
@@ -867,6 +1022,39 @@ export default function ChatRoomScreen({ route, navigation }) {
       </Modal>
 
       {/* Full-screen image preview */}
+      {/* Long-press message actions: react / reply / copy */}
+      <Modal visible={!!actionMsg} transparent animationType="fade" onRequestClose={() => setActionMsg(null)}>
+        <TouchableOpacity style={styles.actionOverlay} activeOpacity={1} onPress={() => setActionMsg(null)}>
+          <View style={styles.actionSheet}>
+            <View style={styles.emojiRow}>
+              {QUICK_REACTIONS.map((e) => {
+                const mine = (actionMsg?.reactions || []).find((r) => String(r.userId) === myId);
+                return (
+                  <TouchableOpacity
+                    key={e}
+                    style={[styles.emojiBtn, mine?.emoji === e && styles.emojiBtnActive]}
+                    onPress={() => toggleReaction(actionMsg, e)}
+                  >
+                    <Text style={styles.emojiText}>{e}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={styles.actionItem} onPress={() => { setReplyTo(actionMsg); setActionMsg(null); }}>
+              <Ionicons name="arrow-undo-outline" size={20} color={Theme.colors.text} />
+              <Text style={styles.actionLabel}>Reply</Text>
+            </TouchableOpacity>
+            {actionMsg?.type !== 'image' && actionMsg?.type !== 'voice' && (
+              <TouchableOpacity style={styles.actionItem} onPress={() => copyMessage(actionMsg)}>
+                <Ionicons name="copy-outline" size={20} color={Theme.colors.text} />
+                <Text style={styles.actionLabel}>Copy</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!previewImage} transparent animationType="fade">
         <View style={styles.previewOverlay}>
           <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewImage(null)}>
@@ -951,6 +1139,43 @@ const styles = StyleSheet.create({
   // Links: underlined, and tinted so they stay legible on either bubble colour.
   link: { color: '#1D4ED8', textDecorationLine: 'underline' },
   linkMine: { color: '#fff', textDecorationLine: 'underline', fontWeight: '700' },
+
+  // Quoted reply shown inside a bubble
+  quoteBox: { borderLeftWidth: 3, borderLeftColor: Theme.colors.primary, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 6 },
+  quoteBoxMine: { borderLeftColor: '#fff', backgroundColor: 'rgba(255,255,255,0.18)' },
+  quoteName: { fontFamily: Theme.typography.fontFamily, fontSize: 11, fontWeight: '800', color: Theme.colors.primary },
+  quoteText: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, marginTop: 1 },
+
+  // Reaction pills under a bubble
+  reactionRow: { flexDirection: 'row', gap: 4, marginTop: -6, marginHorizontal: 4 },
+  reactionPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: Theme.colors.border, elevation: 1 },
+  reactionEmoji: { fontSize: 13 },
+  reactionCount: { fontFamily: Theme.typography.fontFamily, fontSize: 11, fontWeight: '700', color: Theme.colors.textSecondary },
+
+  // Long-press action sheet
+  actionOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  actionSheet: { backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingTop: 14, paddingBottom: 28 },
+  emojiRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 10, paddingBottom: 12 },
+  emojiBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  emojiBtnActive: { backgroundColor: Theme.colors.primary + '22' },
+  emojiText: { fontSize: 26 },
+  actionDivider: { height: 1, backgroundColor: Theme.colors.border },
+  actionItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, paddingVertical: 15 },
+  actionLabel: { fontFamily: Theme.typography.fontFamily, fontSize: 15, color: Theme.colors.text, fontWeight: '600' },
+
+  // Reply preview above the input
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Theme.colors.border },
+  replyStripe: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: Theme.colors.primary },
+  replyName: { fontFamily: Theme.typography.fontFamily, fontSize: 12, fontWeight: '800', color: Theme.colors.primary },
+  replyText: { fontFamily: Theme.typography.fontFamily, fontSize: 12, color: Theme.colors.textSecondary, marginTop: 1 },
+
+  // @mention picker
+  mentionBar: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: Theme.colors.border, maxHeight: 220 },
+  mentionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 9 },
+  mentionAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: Theme.colors.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  mentionAvatarImg: { width: 30, height: 30, borderRadius: 15 },
+  mentionAvatarText: { fontFamily: Theme.typography.fontFamily, fontSize: 11, fontWeight: '800', color: '#fff' },
+  mentionName: { fontFamily: Theme.typography.fontFamily, fontSize: 14, fontWeight: '600', color: Theme.colors.text },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

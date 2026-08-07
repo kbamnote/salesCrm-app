@@ -203,6 +203,8 @@ export const chatApi = {
   updateGroup: (id, data) => api.patch(`/chat/groups/${id}`, data),
   leaveGroup: (id) => api.post(`/chat/groups/${id}/leave`),
   deleteGroup: (id) => api.delete(`/chat/groups/${id}`),
+  // Toggle an emoji reaction on a message (same emoji again = remove).
+  react: (messageId, emoji) => api.post(`/chat/messages/${messageId}/react`, { emoji }),
   // Mark all messages in a chat (from others) as read by the current user.
   markRead: (chatId) => api.post(`/chat/${chatId}/read`),
 };

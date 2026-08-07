@@ -17,6 +17,7 @@ const liveListeners = new Set();    // callbacks for `location:live`
 const connectListeners = new Set(); // callbacks fired when (re)connected
 const chatListeners = new Set();    // callbacks for `chat:message`
 const chatReadListeners = new Set(); // callbacks for `chat:read`
+const chatReactionListeners = new Set(); // callbacks for `chat:reaction`
 const chatGroupListeners = new Set(); // callbacks for `chat:group` (renamed / members changed / deleted)
 const waIncomingListeners = new Set(); // callbacks for `whatsapp:incoming`
 const waSentListeners = new Set();     // callbacks for `whatsapp:sent`
@@ -52,6 +53,9 @@ async function connect() {
     });
     socket.on('chat:read', (data) => {
       chatReadListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('chat:reaction', (data) => {
+      chatReactionListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
     });
     socket.on('chat:group', (data) => {
       chatGroupListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
@@ -123,6 +127,12 @@ function onChatRead(cb) {
   return () => chatReadListeners.delete(cb);
 }
 
+// Subscribe to emoji-reaction updates. Returns an unsubscribe fn.
+function onChatReaction(cb) {
+  chatReactionListeners.add(cb);
+  return () => chatReactionListeners.delete(cb);
+}
+
 // Subscribe to group changes (rename / members / delete). Returns an unsubscribe fn.
 function onGroup(cb) {
   chatGroupListeners.add(cb);
@@ -143,6 +153,6 @@ function onWhatsappSent(cb) {
 
 export default {
   connect, disconnect, isConnected, emitLocation,
-  onLive, onConnect, onChat, onChatRead, onGroup,
+  onLive, onConnect, onChat, onChatRead, onChatReaction, onGroup,
   onWhatsappIncoming, onWhatsappSent,
 };
