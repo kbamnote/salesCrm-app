@@ -56,6 +56,7 @@ export const DRAWER_DEFS = {
   CampaignLeads:       { title: 'Campaign Leads',   icon: 'megaphone-outline' },
   DialPad:             { title: 'Dial Pad',         icon: 'keypad-outline' },
   CallFunnel:          { title: 'Appointments',     icon: 'funnel-outline' },
+  DailyFieldVisit:     { title: 'Daily Field Visit', icon: 'clipboard-outline' },
   Support:             { title: 'Support',          icon: 'help-buoy-outline' },
   SalesPresentation:   { title: 'Sales Presentation', icon: 'easel-outline' },
   Fulfillment:         { title: 'Orders',           icon: 'cube-outline' },
@@ -68,7 +69,7 @@ export const DRAWER_DEFS = {
 // Field reps — the original/unchanged experience.
 const fieldRep = {
   tabs: ['Dashboard', 'Leads', 'Clients', 'ChatList', 'Profile'],
-  drawer: ['CallFunnel', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
+  drawer: ['DailyFieldVisit', 'CallFunnel', 'Attendance', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true },
 };
@@ -76,7 +77,7 @@ const fieldRep = {
 // Oversight roles — field rep + team monitoring + live map tab.
 const oversight = {
   tabs: ['Dashboard', 'Leads', 'TeamMap', 'Clients', 'ChatList', 'Profile'],
-  drawer: ['CallFunnel', 'TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'LateStaff', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
+  drawer: ['DailyFieldVisit', 'CallFunnel', 'TeamMonitor', 'RouteHistory', 'TeamProgress', 'Targets', 'Attendance', 'LateStaff', 'Leave', 'FieldVisits', 'Designs', 'PresentationHistory', 'Fulfillment', 'MyPayslips'],
   landing: 'Dashboard',
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
@@ -128,7 +129,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'ChatList', 'Profile'],
     drawer: [
-      'TeamManagement', 'DialPad', 'CallFunnel', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
+      'TeamManagement', 'DialPad', 'CallFunnel', 'DailyFieldVisit', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'Attendance',

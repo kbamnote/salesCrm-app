@@ -242,6 +242,14 @@ export const callAppointmentsApi = {
   assign: (id, userId) => api.post(`/call-appointments/${id}/assign`, { userId }),
 };
 
+// "Daily Field Visit" — one report per client meeting, filed by the sales rep.
+export const fieldVisitReportsApi = {
+  list: (params) => api.get('/field-visit-reports', { params }),
+  create: (data) => api.post('/field-visit-reports', data),
+  options: () => api.get('/field-visit-reports/options'),
+  myStats: (params) => api.get('/field-visit-reports/my-stats', { params }),
+};
+
 export const telecallerDashApi = {
   stats: () => api.get('/telecaller-dashboard/stats'),
 };

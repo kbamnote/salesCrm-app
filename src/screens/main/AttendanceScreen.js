@@ -28,13 +28,14 @@ const FIELD_METRICS = [
   { key: 'dealClosed', label: 'Deal Closed' },
 ];
 const CALLING_METRICS = [
-  { key: 'totalCalls', label: 'Total Calls Dialed' },
-  { key: 'callsConnected', label: 'Calls Connected' },
-  { key: 'sameDaySchedule', label: 'Same Day Schedule' },
-  { key: 'nextDaySchedule', label: 'Next Day Schedule' },
-  { key: 'otherDaySchedule', label: 'Other Day Schedule' },
+  { key: 'totalCalls', label: 'Total Dialed Calls' },
+  { key: 'callsConnected', label: 'Total Connected Call' },
+  { key: 'sameDaySchedule', label: 'Same Day Appointments Fixed' },
+  { key: 'nextDaySchedule', label: 'Next Day Appointments Fixed' },
+  { key: 'otherDaySchedule', label: 'Other Appointments' },
+  { key: 'followUpMeeting', label: 'Follow-Up Meeting' },
   { key: 'meetingDone', label: 'Meeting Done' },
-  { key: 'dealDone', label: 'Deal Done' },
+  { key: 'dealDone', label: 'Deals Closed' },
 ];
 
 export default function AttendanceScreen() {
@@ -65,6 +66,7 @@ export default function AttendanceScreen() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportValues, setReportValues] = useState({}); // { metricKey: '2', ... }
   const [workCategory, setWorkCategory] = useState(''); // field report only
+  const [remarks, setRemarks] = useState('');           // calling report only
   const [reportKbPad, setReportKbPad] = useState(0);     // keyboard-aware bottom padding
   const pendingReportRef = useRef(null); // holds the submitted report until punch-out completes
   const setMetric = (k, v) => setReportValues((p) => ({ ...p, [k]: v.replace(/[^0-9]/g, '') }));
@@ -242,8 +244,10 @@ export default function AttendanceScreen() {
         sameDaySchedule: num('sameDaySchedule'),
         nextDaySchedule: num('nextDaySchedule'),
         otherDaySchedule: num('otherDaySchedule'),
+        followUpMeeting: num('followUpMeeting'),
         meetingDone: num('meetingDone'),
         dealDone: num('dealDone'),
+        remarks: remarks.trim(),
       };
     } else {
       if (!workCategory.trim()) {
@@ -582,6 +586,22 @@ export default function AttendanceScreen() {
                 />
               </View>
             ))}
+
+            {reportType === 'calling' && (
+              <>
+                <Text style={styles.reportLabel}>Remarks / Comments</Text>
+                <TextInput
+                  ref={(el) => { reportInputRefs.current.remarks = el; }}
+                  style={[styles.reportInput, { height: 70, textAlignVertical: 'top' }]}
+                  value={remarks}
+                  onChangeText={setRemarks}
+                  onFocus={() => scrollReportFieldIntoView(reportInputRefs.current.remarks)}
+                  multiline
+                  placeholder="Anything worth noting about today's calling"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                />
+              </>
+            )}
 
             {reportType === 'field' && (
               <>

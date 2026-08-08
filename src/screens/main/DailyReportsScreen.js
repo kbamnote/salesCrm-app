@@ -22,13 +22,14 @@ const FIELD_METRICS = [
   { key: 'dealClosed', label: 'Deal Closed' },
 ];
 const CALLING_METRICS = [
-  { key: 'totalCalls', label: 'Total Calls Dialed' },
-  { key: 'callsConnected', label: 'Calls Connected' },
-  { key: 'sameDaySchedule', label: 'Same Day Schedule' },
-  { key: 'nextDaySchedule', label: 'Next Day Schedule' },
-  { key: 'otherDaySchedule', label: 'Other Day Schedule' },
+  { key: 'totalCalls', label: 'Total Dialed Calls' },
+  { key: 'callsConnected', label: 'Total Connected Call' },
+  { key: 'sameDaySchedule', label: 'Same Day Appointments Fixed' },
+  { key: 'nextDaySchedule', label: 'Next Day Appointments Fixed' },
+  { key: 'otherDaySchedule', label: 'Other Appointments' },
+  { key: 'followUpMeeting', label: 'Follow-Up Meeting' },
   { key: 'meetingDone', label: 'Meeting Done' },
-  { key: 'dealDone', label: 'Deal Done' },
+  { key: 'dealDone', label: 'Deals Closed' },
 ];
 
 // Renders a report by its type: structured field / calling metrics, or the
@@ -46,6 +47,12 @@ function renderReportBody(report) {
             <Text style={styles.statValue}>{Number(report[m.key] || 0)}</Text>
           </View>
         ))}
+        {report.type === 'calling' && report.remarks ? (
+          <>
+            <Text style={styles.reportLabel}>Remarks / Comments</Text>
+            <Text style={styles.reportText}>{report.remarks}</Text>
+          </>
+        ) : null}
         {report.type === 'field' && report.workCategory ? (
           <>
             <Text style={styles.reportLabel}>Today's Work Category</Text>
