@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -118,7 +118,7 @@ export default function ChatRoomScreen({ route, navigation }) {
     }
   }, [isGroup, groupId, navigation, displayName]);
 
-  const loadGroup = async () => {
+  const loadGroup = useCallback(async () => {
     setMembersLoading(true);
     try {
       const res = await chatApi.groupDetail(groupId);
@@ -129,7 +129,7 @@ export default function ChatRoomScreen({ route, navigation }) {
     } finally {
       setMembersLoading(false);
     }
-  };
+  }, [groupId]);
 
   const openGroupInfo = () => {
     setShowMembers(true);
@@ -242,8 +242,17 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (!chatId) { setLoading(false); return; }
     try {
       const res = await chatApi.messages(chatId);
-      const msgs = res.data || [];
+      // Response shape: { messages: [...], roster: [...] } for groups; older
+      // plain-array responses (1:1) are still handled for backward compatibility.
+      const data = res.data || {};
+      const msgs = Array.isArray(data) ? data : (data.messages || []);
       setMessages(msgs);
+      // The group roster arrives with the messages themselves, so @mention
+      // suggestions have names immediately — even before the fuller groupDetail
+      // call (used by the group-info sheet) finishes.
+      if (Array.isArray(data.roster) && data.roster.length) {
+        setGroupInfo((prev) => ({ ...(prev || {}), members: data.roster }));
+      }
       // If any incoming message hasn't been read by me yet, mark the chat read
       // so the unread badge clears and the sender sees a "seen" receipt.
       const hasUnread = msgs.some((m) => {
@@ -277,11 +286,15 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   useEffect(() => {
     loadMessages();
+    // Preload the group roster on mount (in parallel with messages) so @mentions
+    // are instant — previously the picker had no names until the group-info
+    // sheet was opened, which made mentions feel slow to load.
+    if (isGroup && groupId) loadGroup();
     // Socket delivers messages in real time; this slow poll is just a safety net
     // for anything missed during a socket drop.
     const interval = setInterval(loadMessages, 15000);
     return () => clearInterval(interval);
-  }, [loadMessages]);
+  }, [loadMessages, isGroup, groupId, loadGroup]);
 
   // Real-time: receive new messages + read-receipts over the socket.
   useEffect(() => {
@@ -445,10 +458,16 @@ export default function ChatRoomScreen({ route, navigation }) {
     setMentionQuery(null);
   };
 
-  const mentionOptions = mentionQuery === null ? [] : members
-    .filter((u) => String(u._id) !== myId)
-    .filter((u) => !mentionQuery || (u.name || '').toLowerCase().includes(mentionQuery))
-    .slice(0, 6);
+  // Memoized so the filter only runs when the query or the roster actually
+  // changes — not on every keystroke / unrelated re-render (keeps the picker
+  // as instant as the roster allows).
+  const mentionOptions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return members
+      .filter((u) => String(u._id) !== myId)
+      .filter((u) => !mentionQuery || (u.name || '').toLowerCase().includes(mentionQuery))
+      .slice(0, 6);
+  }, [mentionQuery, members, myId]);
 
   const pickImage = async () => {
     try {
