@@ -83,6 +83,9 @@ export const attendanceApi = {
   roster: (date) => api.get('/attendance/roster', { params: date ? { date } : {} }),
   // Admin/HR: every submitted daily report for a date (default today).
   reports: (date) => api.get('/attendance/reports', { params: date ? { date } : {} }),
+  // Suggested numbers for today's report, derived from actual activity
+  // (calls / appointments / field visits). Pre-fills the punch-out form.
+  reportPrefill: () => api.get('/attendance/report-prefill'),
   // Configured shift timings + grace (for display + lateness rules).
   shift: () => api.get('/attendance/shift'),
   // Oversight: who was late / left early and how often, for a month (YYYY-MM).

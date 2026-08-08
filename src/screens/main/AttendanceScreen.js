@@ -229,7 +229,32 @@ export default function AttendanceScreen() {
   const onPunchOutPress = () => {
     setReportValues({});
     setWorkCategory('');
+    setRemarks('');
     setReportModalOpen(true);
+    // Pre-fill the report with today's actuals (calls / appointments / visits)
+    // so the numbers are already there and editable. Any metric key the server
+    // returns is applied generically, so newly-added report fields are covered
+    // without extra wiring. On failure the form stays blank and fillable.
+    attendanceApi.reportPrefill()
+      .then((r) => {
+        const p = r?.data;
+        if (!p || typeof p !== 'object') return;
+        const prefill = {};
+        Object.entries(p).forEach(([k, v]) => {
+          if (k === 'type') return;
+          const n = parseInt(v, 10);
+          if (Number.isFinite(n)) prefill[k] = String(n);
+        });
+        setReportValues((prev) => {
+          // Don't clobber anything the user already typed while prefill loaded.
+          const merged = { ...prev };
+          Object.entries(prefill).forEach(([k, v]) => {
+            if (merged[k] === undefined || merged[k] === '') merged[k] = v;
+          });
+          return merged;
+        });
+      })
+      .catch(() => {});
   };
 
   const submitReport = () => {
