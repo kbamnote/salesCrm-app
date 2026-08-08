@@ -86,6 +86,9 @@ export const attendanceApi = {
   // Suggested numbers for today's report, derived from actual activity
   // (calls / appointments / field visits). Pre-fills the punch-out form.
   reportPrefill: () => api.get('/attendance/report-prefill'),
+  // Excel export of the caller's OWN reports — period: daily|weekly|monthly,
+  // date: YYYY-MM-DD (reference day inside the period). Returns { filename, base64 }.
+  exportReport: (params) => api.get('/attendance/export', { params }),
   // Configured shift timings + grace (for display + lateness rules).
   shift: () => api.get('/attendance/shift'),
   // Oversight: who was late / left early and how often, for a month (YYYY-MM).

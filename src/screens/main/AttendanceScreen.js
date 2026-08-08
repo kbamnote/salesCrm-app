@@ -9,6 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { attendanceApi, locationsApi } from '../../api';
 import { startBackgroundTracking, stopBackgroundTracking, ensureForegroundPermission } from '../../services/locationTracking';
 import BackgroundLocationDisclosure from '../../components/BackgroundLocationDisclosure';
@@ -70,6 +73,13 @@ export default function AttendanceScreen() {
   const [reportKbPad, setReportKbPad] = useState(0);     // keyboard-aware bottom padding
   const pendingReportRef = useRef(null); // holds the submitted report until punch-out completes
   const setMetric = (k, v) => setReportValues((p) => ({ ...p, [k]: v.replace(/[^0-9]/g, '') }));
+
+  // Excel report export (My Attendance) — daily / weekly / monthly, pickable.
+  // Reference date defaults to today; weekly/monthly use the containing week/month.
+  const [exportPeriod, setExportPeriod] = useState('monthly'); // 'daily' | 'weekly' | 'monthly'
+  const [exportDate, setExportDate] = useState(new Date());
+  const [showExportPicker, setShowExportPicker] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Report-modal scrolling: keep a focused field above the keyboard (Android
   // modals don't auto-resize, so we scroll the field into view ourselves).
@@ -255,6 +265,51 @@ export default function AttendanceScreen() {
         });
       })
       .catch(() => {});
+  };
+
+  // ── Excel report export ──
+  // Generates the user's own reports as Excel (daily / weekly / monthly) and
+  // opens the native share sheet so they can download or send it (WhatsApp…).
+  const exportLabel = () => {
+    const d = exportDate;
+    if (exportPeriod === 'daily') return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    if (exportPeriod === 'weekly') {
+      const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday of the week
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const f = (x) => x.toLocaleDateString([], { day: 'numeric', month: 'short' });
+      return `${f(mon)} – ${f(sun)}`;
+    }
+    return d.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  };
+
+  const onExportPeriod = (p) => { setExportPeriod(p); setExportDate(new Date()); };
+
+  const onExportDate = (e, d) => {
+    setShowExportPicker(false);
+    if (e?.type !== 'dismissed' && d) setExportDate(d);
+  };
+
+  const downloadReport = async () => {
+    setExporting(true);
+    try {
+      const res = await attendanceApi.exportReport({ period: exportPeriod, date: exportDate.toISOString().slice(0, 10) });
+      const { filename, base64 } = res.data;
+      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: `${exportPeriod.charAt(0).toUpperCase()}${exportPeriod.slice(1)} Report`,
+          UTI: 'org.openxmlformats.spreadsheetml.sheet',
+        });
+      } else {
+        Alert.alert('Saved', `Report saved as ${filename}.`);
+      }
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.error || 'Could not generate the report.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const submitReport = () => {
@@ -529,6 +584,52 @@ export default function AttendanceScreen() {
             <Ionicons name="location-outline" size={16} color="#92400E" />
             <Text style={styles.locationWarningText}>Tap to enable location access</Text>
           </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Excel Report Export */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Download Report</Text>
+        <View style={styles.exportTabs}>
+          {['daily', 'weekly', 'monthly'].map((p) => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.exportTab, exportPeriod === p && styles.exportTabOn]}
+              onPress={() => onExportPeriod(p)}
+            >
+              <Text style={[styles.exportTabText, exportPeriod === p && styles.exportTabTextOn]}>
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.exportDateBtn} onPress={() => setShowExportPicker(true)}>
+          <Ionicons name="calendar-outline" size={16} color={Theme.colors.primary} />
+          <Text style={styles.exportDateText}>{exportLabel()}</Text>
+          <Ionicons name="chevron-down" size={15} color={Theme.colors.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.exportBtn, exporting && { opacity: 0.7 }]}
+          onPress={downloadReport}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={18} color="#fff" />
+              <Text style={styles.exportBtnText}>Download & Share Excel</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {showExportPicker && (
+          <DateTimePicker
+            value={exportDate}
+            mode="date"
+            maximumDate={new Date()}
+            display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+            onChange={onExportDate}
+          />
         )}
       </View>
 
@@ -822,6 +923,19 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     marginBottom: Theme.spacing.m,
   },
+  exportTabs: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: Theme.borderRadius.m, padding: 4, marginBottom: Theme.spacing.m },
+  exportTab: { flex: 1, alignItems: 'center', paddingVertical: Theme.spacing.s, borderRadius: Theme.borderRadius.m },
+  exportTabOn: { backgroundColor: Theme.colors.white, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
+  exportTabText: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s, fontWeight: '600', color: Theme.colors.textSecondary },
+  exportTabTextOn: { color: Theme.colors.primary, fontWeight: Theme.typography.weights.bold },
+  exportDateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC', borderRadius: Theme.borderRadius.m, borderWidth: 1, borderColor: Theme.colors.border,
+    paddingHorizontal: Theme.spacing.m, paddingVertical: Theme.spacing.m, marginBottom: Theme.spacing.m,
+  },
+  exportDateText: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.s, fontWeight: '600', color: Theme.colors.text },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Theme.colors.primary, borderRadius: Theme.borderRadius.m, paddingVertical: Theme.spacing.m },
+  exportBtnText: { fontFamily: Theme.typography.fontFamily, fontSize: Theme.typography.sizes.m, fontWeight: Theme.typography.weights.bold, color: '#fff' },
   emptyLog: { alignItems: 'center', paddingVertical: Theme.spacing.xl },
   emptyLogText: {
     fontFamily: Theme.typography.fontFamily,
