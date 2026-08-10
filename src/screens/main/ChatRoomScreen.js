@@ -24,6 +24,9 @@ const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}`;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// How close to the end of the list still counts as "at the bottom" (px).
+const BOTTOM_THRESHOLD = 80;
+
 const makeChatId = (a, b) => [String(a), String(b)].sort().join('_');
 
 const uploadToCloudinary = async (uri, resourceType = 'image') => {
@@ -67,6 +70,12 @@ export default function ChatRoomScreen({ route, navigation }) {
   const [mentionQuery, setMentionQuery] = useState(null); // null = picker closed
   const mentionedRef = useRef([]);                    // ids @mentioned in the draft
   const flatListRef = useRef(null);
+  // Scroll anchoring — the list only jumps to the newest message when the user
+  // is already at the bottom. Scrolled up reading history (or coming back from
+  // the image preview), their position is left exactly where it was.
+  const atBottomRef = useRef(true);
+  const didInitialScrollRef = useRef(false);
+  const [atBottom, setAtBottom] = useState(true);
 
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -367,10 +376,52 @@ export default function ChatRoomScreen({ route, navigation }) {
     return () => { if (unsub) unsub(); };
   }, [isGroup, groupId, myId, navigation]);
 
-  useEffect(() => {
-    if (messages.length > 0 && flatListRef.current) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  // Force the list to the newest message (used on first open and after *I*
+  // send something — never for background refreshes).
+  const scrollToBottom = useCallback((animated = true) => {
+    atBottomRef.current = true;
+    setAtBottom(true);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated }), 50);
+  }, []);
+
+  // Keep track of where the user is. `atBottomRef` is what the scroll logic
+  // reads (always current); `atBottom` only drives the jump-to-latest button.
+  const onListScroll = useCallback((e) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    const near = distanceFromBottom <= BOTTOM_THRESHOLD;
+    if (near !== atBottomRef.current) {
+      atBottomRef.current = near;
+      setAtBottom(near);
     }
+  }, []);
+
+  // Content size changes on every re-render/relayout — including opening and
+  // closing the image preview. Only follow it to the bottom if that's where the
+  // user already was, otherwise their scroll position is lost.
+  const onListContentSizeChange = useCallback(() => {
+    if (!didInitialScrollRef.current) {
+      if (messages.length > 0) {
+        didInitialScrollRef.current = true;
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }
+      return;
+    }
+    if (atBottomRef.current) flatListRef.current?.scrollToEnd({ animated: false });
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (!messages.length || !flatListRef.current) return;
+    if (!didInitialScrollRef.current) {
+      didInitialScrollRef.current = true;
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+      return;
+    }
+    // New message while reading history → stay put; the jump-to-latest button
+    // is there if they want to catch up.
+    if (!atBottomRef.current) return;
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
   useEffect(() => {
@@ -400,6 +451,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       if (mentions.length) payload.mentions = mentions;
       const sent = await chatApi.send(payload);
       if (sent?.data) upsertMessage(sent.data); // instant local echo (socket dedupes)
+      scrollToBottom(); // my own message always pulls the list down
     } catch (e) {
       const errMsg = e.response?.data?.message || 'Failed to send message.';
       Alert.alert('Error', errMsg);
@@ -489,6 +541,7 @@ export default function ChatRoomScreen({ route, navigation }) {
         : { toId, content: url, type: 'image' };
       await chatApi.send(payload);
       await loadMessages();
+      scrollToBottom();
     } catch (e) {
       Alert.alert('Error', 'Could not send image. Please try again.');
       console.log('Image send error', e);
@@ -552,6 +605,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       payload.duration = duration;
       await chatApi.send(payload);
       await loadMessages();
+      scrollToBottom();
     } catch (e) {
       Alert.alert('Error', 'Could not send voice note. Please try again.');
       console.log('Voice send error', e);
@@ -755,14 +809,27 @@ export default function ChatRoomScreen({ route, navigation }) {
           <Text style={styles.emptySubText}>Send a message to start the conversation</Text>
         </View>
       ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, i) => item._id || String(i)}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        />
+        <View style={styles.listWrap}>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item, i) => item._id || String(i)}
+            renderItem={renderMessage}
+            contentContainerStyle={styles.messagesList}
+            onContentSizeChange={onListContentSizeChange}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
+          />
+          {!atBottom && (
+            <TouchableOpacity
+              style={styles.jumpLatest}
+              onPress={() => scrollToBottom(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chevron-down" size={22} color={Theme.colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {uploading && (
@@ -1074,7 +1141,12 @@ export default function ChatRoomScreen({ route, navigation }) {
         </TouchableOpacity>
       </Modal>
 
-      <Modal visible={!!previewImage} transparent animationType="fade">
+      <Modal
+        visible={!!previewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
         <View style={styles.previewOverlay}>
           <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewImage(null)}>
             <Ionicons name="close" size={28} color="#fff" />
@@ -1109,9 +1181,28 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 4,
   },
+  listWrap: { flex: 1 },
   messagesList: {
     paddingVertical: Theme.spacing.m,
     paddingHorizontal: Theme.spacing.m,
+  },
+  jumpLatest: {
+    position: 'absolute',
+    right: Theme.spacing.m,
+    bottom: Theme.spacing.m,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   msgWrapper: { marginBottom: 4, maxWidth: '80%' },
   msgRight: { alignSelf: 'flex-end' },

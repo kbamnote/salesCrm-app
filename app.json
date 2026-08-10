@@ -47,7 +47,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 106,
+      "versionCode": 107,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
