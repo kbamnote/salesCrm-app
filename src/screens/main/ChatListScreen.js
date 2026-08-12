@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Image
+  RefreshControl, ActivityIndicator, Image, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,6 +22,30 @@ export default function ChatListScreen({ navigation }) {
   const [usersMap, setUsersMap] = useState({}); // userId -> user, for names
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Global message search (across every chat the user belongs to).
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef(null);
+
+  // Debounced so a fast typist doesn't fire a request per keystroke.
+  const runSearch = (q) => {
+    setQuery(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (q.trim().length < 2) { setHits([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const res = await chatApi.search(q.trim());
+        setHits(res.data || []);
+      } catch (e) {
+        setHits([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  };
 
   const loadData = async () => {
     try {
@@ -107,7 +131,8 @@ export default function ChatListScreen({ navigation }) {
           </View>
           <View style={styles.cardBottom}>
             <Text style={styles.lastMsg} numberOfLines={1}>
-              {lastMsg?.type === 'image' ? '📷 Photo'
+              {lastMsg?.deleted ? 'This message was deleted'
+                : lastMsg?.type === 'image' ? '📷 Photo'
                 : lastMsg?.type === 'voice' ? '🎤 Voice note'
                 : (lastMsg?.content || 'No messages yet')}
             </Text>
@@ -126,8 +151,77 @@ export default function ChatListScreen({ navigation }) {
     return <View style={styles.center}><ActivityIndicator size="large" color={Theme.colors.primary} /></View>;
   }
 
+  // Global search across every chat the user is in. Results open the source
+  // conversation; the chat's own search bar handles jumping to the message.
+  const openHit = (hit) => {
+    const hitChatId = String(hit.chatId);
+    const isGroup = !hitChatId.includes('_');
+    const otherId = isGroup ? null : hitChatId.split('_').find((id) => id !== myId);
+    setQuery('');
+    setHits([]);
+    navigation.navigate('ChatRoom', {
+      chatId: hitChatId,
+      toId: isGroup ? undefined : otherId,
+      chatName: isGroup ? (hit.chatLabel || 'Group') : (usersMap[otherId]?.name || hit.chatLabel || 'Chat'),
+      groupId: isGroup ? hitChatId : undefined,
+    });
+  };
+
+  const renderHit = ({ item }) => (
+    <TouchableOpacity style={styles.card} onPress={() => openHit(item)}>
+      <View style={styles.avatar}>
+        <Ionicons name="search" size={20} color="#fff" />
+      </View>
+      <View style={styles.cardContent}>
+        <View style={styles.cardTop}>
+          <Text style={styles.chatName} numberOfLines={1}>{item.chatLabel || item.fromName}</Text>
+          <Text style={styles.timeText}>{formatTime(item.createdAt)}</Text>
+        </View>
+        <Text style={styles.lastMsg} numberOfLines={2}>
+          {item.fromName}: {item.caption || item.content || item.fileName || ''}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={Theme.colors.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search messages"
+          placeholderTextColor={Theme.colors.textSecondary}
+          value={query}
+          onChangeText={runSearch}
+          returnKeyType="search"
+        />
+        {searching ? (
+          <ActivityIndicator size="small" color={Theme.colors.primary} />
+        ) : query ? (
+          <TouchableOpacity onPress={() => { setQuery(''); setHits([]); }}>
+            <Ionicons name="close" size={18} color={Theme.colors.textSecondary} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {query.trim().length >= 2 ? (
+        <FlatList
+          data={hits}
+          keyExtractor={(m) => String(m._id)}
+          renderItem={renderHit}
+          keyboardShouldPersistTaps="handled"
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            !searching ? (
+              <View style={styles.empty}>
+                <Ionicons name="search-outline" size={48} color={Theme.colors.border} />
+                <Text style={styles.emptyTitle}>No matches</Text>
+              </View>
+            ) : null
+          }
+        />
+      ) : (
       <FlatList
         data={conversations}
         keyExtractor={(item, i) => item._id || String(i)}
@@ -142,6 +236,7 @@ export default function ChatListScreen({ navigation }) {
           </View>
         }
       />
+      )}
 
       {/* New chat FAB */}
       <TouchableOpacity
@@ -158,6 +253,25 @@ export default function ChatListScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.white },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Theme.spacing.l,
+    marginTop: Theme.spacing.m,
+    marginBottom: Theme.spacing.s,
+    paddingHorizontal: 10,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  searchInput: {
+    flex: 1,
+    marginHorizontal: 8,
+    padding: 0,
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.m,
+    color: Theme.colors.text,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

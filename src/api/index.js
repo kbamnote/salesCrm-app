@@ -213,6 +213,20 @@ export const chatApi = {
   react: (messageId, emoji) => api.post(`/chat/messages/${messageId}/react`, { emoji }),
   // Mark all messages in a chat (from others) as read by the current user.
   markRead: (chatId) => api.post(`/chat/${chatId}/read`),
+  // Second (grey) tick — this device has the messages.
+  markDelivered: (chatId) => api.post(`/chat/${chatId}/delivered`),
+  // Edit / delete-for-everyone; both allowed for 24h after sending.
+  editMessage: (messageId, content) => api.patch(`/chat/messages/${messageId}`, { content }),
+  deleteMessage: (messageId) => api.delete(`/chat/messages/${messageId}`),
+  // Pin toggle + the chat's pinned list (newest first).
+  pinMessage: (messageId) => api.post(`/chat/messages/${messageId}/pin`),
+  pinned: (chatId) => api.get(`/chat/${chatId}/pinned`),
+  // Multi-select delete. Returns { deleted: [], skipped: [] }.
+  bulkDelete: (ids) => api.post('/chat/messages/bulk-delete', { ids }),
+  // Message search. Omit chatId for a global search across all my chats.
+  search: (q, chatId) => api.get('/chat/search', { params: { q, chatId } }),
+  // Online / last-seen for a set of user ids.
+  presence: (ids) => api.get('/chat/presence', { params: { ids: ids.join(',') } }),
 };
 
 export const usersApi = {
@@ -238,6 +252,12 @@ export const callsApi = {
   update: (id, data) => api.put(`/calls/${id}`, data),
   // Upsert one call-log entry per lead (who was called + status + assignee).
   logLead: (data) => api.post('/calls/log-lead', data),
+  // Dialled-number log. Callers always get their own calls regardless of params;
+  // admin/HR can pass userId to scope it to one person. Dates are YYYY-MM-DD.
+  log: (params) => api.get('/calls/log', { params }),
+  logUsers: () => api.get('/calls/log/users'),
+  // Excel download (admin/HR only) → { filename, base64 }.
+  logExport: (params) => api.get('/calls/log/export', { params }),
 };
 
 // Call funnel — appointments booked by a calling role, routed by HR to sales.

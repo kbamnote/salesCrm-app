@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { attendanceApi } from '../../api';
+import { useAuth } from '../../context/AuthContext';
 import { Theme } from '../../theme/Theme';
 
 const toDateStr = (d) => d.toISOString().split('T')[0];
@@ -85,6 +86,10 @@ function renderReportBody(report) {
 }
 
 export default function DailyReportsScreen() {
+  const { user } = useAuth();
+  // The API returns everyone's reports to admin/HR and only your own to
+  // everybody else, so this flag just adjusts the wording.
+  const isOversight = ['admin', 'hr'].includes(user?.role);
   const [date, setDate] = useState(new Date());
   const [showDate, setShowDate] = useState(false);
   const [reports, setReports] = useState([]);
@@ -138,10 +143,24 @@ export default function DailyReportsScreen() {
     </View>
   );
 
+  // Non-oversight roles only ever receive their own reports, so the same cards
+  // are titled as personal totals rather than team totals.
   const summaryHeader = reports.length ? (
     <View>
-      {summary.callingCount > 0 && <SummaryCard title="📞 Calling Team" count={summary.callingCount} metrics={summary.calling} />}
-      {summary.fieldCount > 0 && <SummaryCard title="🧑‍💼 Sales Team" count={summary.fieldCount} metrics={summary.field} />}
+      {summary.callingCount > 0 && (
+        <SummaryCard
+          title={isOversight ? '📞 Calling Team' : '📞 My Calling Report'}
+          count={summary.callingCount}
+          metrics={summary.calling}
+        />
+      )}
+      {summary.fieldCount > 0 && (
+        <SummaryCard
+          title={isOversight ? '🧑‍💼 Sales Team' : '🧑‍💼 My Sales Report'}
+          count={summary.fieldCount}
+          metrics={summary.field}
+        />
+      )}
     </View>
   ) : null;
 
@@ -199,7 +218,11 @@ export default function DailyReportsScreen() {
           <View style={styles.empty}>
             <Ionicons name="document-text-outline" size={48} color={Theme.colors.border} />
             <Text style={styles.emptyText}>No reports for {fmtDate(date)}</Text>
-            <Text style={styles.emptySub}>Reports appear here once employees punch out.</Text>
+            <Text style={styles.emptySub}>
+              {isOversight
+                ? 'Reports appear here once employees punch out.'
+                : 'Your report appears here once you punch out for the day.'}
+            </Text>
           </View>
         }
       />

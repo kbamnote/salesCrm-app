@@ -21,6 +21,7 @@ export const TAB_DEFS = {
   WhatsApp: { active: 'logo-whatsapp', inactive: 'logo-whatsapp', label: 'WhatsApp' },
   Calls: { active: 'call', inactive: 'call-outline', label: 'Calls' },
   ChatList: { active: 'chatbubbles', inactive: 'chatbubbles-outline', label: 'Team Chat' },
+  DialPad: { active: 'keypad', inactive: 'keypad-outline', label: 'Dial Pad' },
 };
 
 // Drawer item title + icon.
@@ -40,6 +41,7 @@ export const DRAWER_DEFS = {
   Payroll:             { title: 'Payroll',         icon: 'cash-outline' },
   MyPayslips:          { title: 'My Payslips',     icon: 'receipt-outline' },
   // Tab-capable screens also exposed as drawer items (used by admin's full access).
+  Leads:               { title: 'Leads',           icon: 'funnel-outline' },
   HRDashboard:         { title: 'HR Dashboard',    icon: 'grid-outline' },
   TeamMap:             { title: 'Team Map',        icon: 'map-outline' },
   RouteHistory:        { title: 'Route History',   icon: 'navigate-outline' },
@@ -55,6 +57,7 @@ export const DRAWER_DEFS = {
   NewClients:          { title: 'New Clients',      icon: 'sparkles-outline' },
   CampaignLeads:       { title: 'Campaign Leads',   icon: 'megaphone-outline' },
   DialPad:             { title: 'Dial Pad',         icon: 'keypad-outline' },
+  CallLogs:            { title: 'Call Logs',        icon: 'receipt-outline' },
   CallFunnel:          { title: 'Appointments',     icon: 'funnel-outline' },
   DailyFieldVisit:     { title: 'Daily Field Visit', icon: 'clipboard-outline' },
   Support:             { title: 'Support',          icon: 'help-buoy-outline' },
@@ -82,11 +85,12 @@ const oversight = {
   can: { closeDeal: true, addLead: true, addClient: true, fieldVisit: true, presentations: true, monitor: true },
 };
 
-// TMS/TME are field reps who ALSO make calls, so they get the dial pad on top
-// of the standard field-rep access.
+// TMS/TME are field reps who ALSO make calls. Calling is their most frequent
+// action, so the dial pad sits in the bottom bar and Leads moves to the drawer.
 const callingFieldRep = {
   ...fieldRep,
-  drawer: ['DialPad', ...fieldRep.drawer],
+  tabs: ['Dashboard', 'DialPad', 'Clients', 'ChatList', 'Profile'],
+  drawer: ['Leads', 'CallLogs', 'DailyReports', ...fieldRep.drawer],
 };
 
 export const ROLE_CONFIG = {
@@ -96,8 +100,8 @@ export const ROLE_CONFIG = {
 
   // Phone outreach — no field visits / presentations / close-deal.
   telecaller: {
-    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
-    drawer: ['DialPad', 'CallFunnel', 'Attendance', 'Leave', 'Designs', 'MyPayslips'],
+    tabs: ['TelecallerDashboard', 'DialPad', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
+    drawer: ['Leads', 'CallFunnel', 'CallLogs', 'DailyReports', 'Attendance', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true },
   },
@@ -106,8 +110,8 @@ export const ROLE_CONFIG = {
   // fulfillment Data Collection & Kit Check stages, so she gets the Orders
   // section that regular telecallers don't see.
   assistant_hr: {
-    tabs: ['TelecallerDashboard', 'Leads', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
-    drawer: ['DialPad', 'CallFunnel', 'CloseDeal', 'Attendance', 'Leave', 'Designs', 'Fulfillment', 'MyPayslips'],
+    tabs: ['TelecallerDashboard', 'DialPad', 'Calls', 'WhatsApp', 'ChatList', 'Profile'],
+    drawer: ['Leads', 'CallFunnel', 'CallLogs', 'DailyReports', 'CloseDeal', 'Attendance', 'Leave', 'Designs', 'Fulfillment', 'MyPayslips'],
     landing: 'TelecallerDashboard',
     can: { addLead: true, closeDeal: true },
   },
@@ -115,7 +119,7 @@ export const ROLE_CONFIG = {
   // HR — oversight-first (monitor team), no sales pipeline tabs.
   hr: {
     tabs: ['HRDashboard', 'TeamMonitor', 'TeamMap', 'Onboarding', 'ChatList', 'Profile'],
-    drawer: ['CallFunnel', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'TeamAttendance', 'LateStaff', 'Leave', 'Designs', 'MyPayslips'],
+    drawer: ['CallFunnel', 'CallLogs', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation', 'CloseDeal', 'SendNotification', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Payroll', 'TeamProgress', 'Targets', 'OfferLetter', 'Agreement', 'Attendance', 'TeamAttendance', 'LateStaff', 'Leave', 'Designs', 'MyPayslips'],
     landing: 'HRDashboard',
     can: { monitor: true, closeDeal: true, addClient: true },
   },
@@ -129,7 +133,7 @@ export const ROLE_CONFIG = {
   admin: {
     tabs: ['Dashboard', 'Leads', 'Clients', 'TeamMonitor', 'ChatList', 'Profile'],
     drawer: [
-      'TeamManagement', 'DialPad', 'CallFunnel', 'DailyFieldVisit', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
+      'TeamManagement', 'DialPad', 'CallFunnel', 'CallLogs', 'DailyFieldVisit', 'NewClients', 'CampaignLeads', 'Support', 'SalesPresentation',
       'SendNotification', 'HRDashboard', 'TeamMap', 'DailyReports', 'RouteHistory', 'Fulfillment', 'Onboarding', 'Calls', 'Designs',
       'TeamProgress', 'Targets', 'Payroll', 'OfferLetter', 'Agreement', 'Leave',
       'Attendance',

@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -54,14 +55,18 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <AppNavigator />
-        </AuthProvider>
-        {!splashDone && <AnimatedSplash onFinish={() => setSplashDone(true)} />}
-      </View>
-    </SafeAreaProvider>
+    // Required by react-native-gesture-handler v2 for gestures outside the
+    // navigators (swipe-to-reply in chat).
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+          <AuthProvider>
+            <StatusBar style="dark" />
+            <AppNavigator />
+          </AuthProvider>
+          {!splashDone && <AnimatedSplash onFinish={() => setSplashDone(true)} />}
+        </View>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

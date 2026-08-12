@@ -19,6 +19,10 @@ const chatListeners = new Set();    // callbacks for `chat:message`
 const chatReadListeners = new Set(); // callbacks for `chat:read`
 const chatReactionListeners = new Set(); // callbacks for `chat:reaction`
 const chatGroupListeners = new Set(); // callbacks for `chat:group` (renamed / members changed / deleted)
+const chatUpdateListeners = new Set(); // callbacks for `chat:update` (edited / deleted / pinned)
+const chatDeliveredListeners = new Set(); // callbacks for `chat:delivered`
+const typingListeners = new Set();   // callbacks for `chat:typing`
+const presenceListeners = new Set(); // callbacks for `presence:update` / `presence:snapshot`
 const waIncomingListeners = new Set(); // callbacks for `whatsapp:incoming`
 const waSentListeners = new Set();     // callbacks for `whatsapp:sent`
 
@@ -56,6 +60,24 @@ async function connect() {
     });
     socket.on('chat:reaction', (data) => {
       chatReactionListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    // Out-of-band changes to an existing message: edit, delete, pin/unpin.
+    socket.on('chat:update', (data) => {
+      chatUpdateListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('chat:delivered', (data) => {
+      chatDeliveredListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('chat:typing', (data) => {
+      typingListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    // Both presence events share one listener set; `online` is a list on the
+    // snapshot and a boolean on the per-user update.
+    socket.on('presence:update', (data) => {
+      presenceListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
+    });
+    socket.on('presence:snapshot', (data) => {
+      presenceListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
     });
     socket.on('chat:group', (data) => {
       chatGroupListeners.forEach((cb) => { try { cb(data); } catch (_) {} });
@@ -133,6 +155,35 @@ function onChatReaction(cb) {
   return () => chatReactionListeners.delete(cb);
 }
 
+// Tell the other side whether I'm typing in this chat (relayed, never stored).
+function emitTyping(chatId, typing) {
+  if (socket && socket.connected) socket.emit('chat:typing', { chatId, typing });
+}
+
+// Subscribe to typing events. Returns an unsubscribe fn.
+function onTyping(cb) {
+  typingListeners.add(cb);
+  return () => typingListeners.delete(cb);
+}
+
+// Subscribe to online/offline changes. Returns an unsubscribe fn.
+function onPresence(cb) {
+  presenceListeners.add(cb);
+  return () => presenceListeners.delete(cb);
+}
+
+// Subscribe to message edits / deletes / pins. Returns an unsubscribe fn.
+function onChatUpdate(cb) {
+  chatUpdateListeners.add(cb);
+  return () => chatUpdateListeners.delete(cb);
+}
+
+// Subscribe to delivery receipts. Returns an unsubscribe fn.
+function onChatDelivered(cb) {
+  chatDeliveredListeners.add(cb);
+  return () => chatDeliveredListeners.delete(cb);
+}
+
 // Subscribe to group changes (rename / members / delete). Returns an unsubscribe fn.
 function onGroup(cb) {
   chatGroupListeners.add(cb);
@@ -154,5 +205,6 @@ function onWhatsappSent(cb) {
 export default {
   connect, disconnect, isConnected, emitLocation,
   onLive, onConnect, onChat, onChatRead, onChatReaction, onGroup,
+  onChatUpdate, onChatDelivered, emitTyping, onTyping, onPresence,
   onWhatsappIncoming, onWhatsappSent,
 };

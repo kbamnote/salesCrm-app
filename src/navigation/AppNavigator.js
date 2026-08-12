@@ -61,6 +61,7 @@ import DailyReportsScreen from '../screens/main/DailyReportsScreen';
 import NewClientsScreen from '../screens/main/NewClientsScreen';
 import CampaignLeadsScreen from '../screens/main/CampaignLeadsScreen';
 import DialPadScreen from '../screens/main/DialPadScreen';
+import CallLogsScreen from '../screens/main/CallLogsScreen';
 import CallFunnelScreen from '../screens/main/CallFunnelScreen';
 import DailyFieldVisitScreen from '../screens/main/DailyFieldVisitScreen';
 import SupportRequestsScreen from '../screens/main/SupportRequestsScreen';
@@ -106,6 +107,7 @@ const TAB_COMPONENTS = {
   Onboarding: OnboardingScreen,
   Designs: DesignsScreen,
   ChatList: ChatListScreen,
+  DialPad: DialPadScreen,
 };
 const DRAWER_COMPONENTS = {
   TeamMonitor: TeamMonitorScreen,
@@ -121,6 +123,7 @@ const DRAWER_COMPONENTS = {
   Payroll: PayrollScreen,
   MyPayslips: MyPayslipsScreen,
   // Tab-capable screens also usable as drawer items (admin full access).
+  Leads: LeadsScreen,
   HRDashboard: HRDashboardScreen,
   TeamMap: TeamMapScreen,
   Onboarding: OnboardingScreen,
@@ -137,6 +140,7 @@ const DRAWER_COMPONENTS = {
   NewClients: NewClientsScreen,
   CampaignLeads: CampaignLeadsScreen,
   DialPad: DialPadScreen,
+  CallLogs: CallLogsScreen,
   CallFunnel: CallFunnelScreen,
   DailyFieldVisit: DailyFieldVisitScreen,
   Support: SupportRequestsScreen,
