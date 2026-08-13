@@ -47,7 +47,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 107,
+      "versionCode": 108,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
@@ -76,7 +76,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images to chats, designs and payment proofs.",
-        "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to take photos and send them in chats."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to take photos and send them in chats."
         }
       ],
       [

@@ -28,6 +28,26 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // How close to the end of the list still counts as "at the bottom" (px).
 const BOTTOM_THRESHOLD = 80;
+// How close to the top triggers loading the previous page of history (px).
+const TOP_THRESHOLD = 60;
+// Messages fetched per page — must match what the server treats as "a full
+// page" so hasMore is computed correctly (a short final page means the end
+// of history has been reached).
+const PAGE_SIZE = 50;
+
+// Merge a freshly-fetched "latest window" into what's already loaded, keeping
+// any older history the user paginated in (everything before the fresh
+// window's oldest message) and letting the fresh batch supersede whatever it
+// overlaps with (so edits/reactions/deletes on recent messages still show up).
+const mergeFreshWindow = (prev, fresh) => {
+  if (!fresh.length) return prev;
+  const freshIds = new Set(fresh.map((m) => String(m._id)));
+  const oldestFreshTime = new Date(fresh[0].createdAt).getTime();
+  const olderHistory = prev.filter((m) => (
+    !freshIds.has(String(m._id)) && new Date(m.createdAt).getTime() < oldestFreshTime
+  ));
+  return [...olderHistory, ...fresh];
+};
 
 // A typing event is treated as stale this long after it arrived, so a dropped
 // "stopped typing" never leaves the indicator stuck on.
@@ -121,6 +141,15 @@ export default function ChatRoomScreen({ route, navigation }) {
   const atBottomRef = useRef(true);
   const didInitialScrollRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
+
+  // Older-history pagination — scrolling to the top loads the previous page
+  // instead of the chat being capped at whatever the first fetch returned.
+  const messagesRef = useRef([]);          // always-current mirror of `messages`
+  const hasMoreRef = useRef(true);         // more history exists before what's loaded
+  const loadingOlderRef = useRef(false);
+  const loadedChatIdRef = useRef(null);    // which chat the loaded messages belong to
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -351,12 +380,26 @@ export default function ChatRoomScreen({ route, navigation }) {
   const loadMessages = useCallback(async () => {
     if (!chatId) { setLoading(false); return; }
     try {
-      const res = await chatApi.messages(chatId);
+      const res = await chatApi.messages(chatId, { limit: PAGE_SIZE });
       // Response shape: { messages: [...], roster: [...] } for groups; older
       // plain-array responses (1:1) are still handled for backward compatibility.
       const data = res.data || {};
       const msgs = Array.isArray(data) ? data : (data.messages || []);
-      setMessages(msgs);
+
+      // A full page back means there's more history before it; a short page
+      // means we've already got everything. Recomputed on every call (including
+      // the 15s safety poll) so it self-corrects if messages get deleted.
+      const more = msgs.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
+
+      // On first load of THIS chat, replace outright. On a later refresh of the
+      // SAME chat (the poll, or a manual reload), merge instead of replacing —
+      // otherwise it would wipe out any older history the user paginated in.
+      const sameChat = loadedChatIdRef.current === chatId;
+      setMessages((prev) => (sameChat ? mergeFreshWindow(prev, msgs) : msgs));
+      loadedChatIdRef.current = chatId;
+
       // The group roster arrives with the messages themselves, so @mention
       // suggestions have names immediately — even before the fuller groupDetail
       // call (used by the group-info sheet) finishes.
@@ -373,7 +416,7 @@ export default function ChatRoomScreen({ route, navigation }) {
       // Remember where my unread run started, once per visit, so the divider
       // stays put even after the chat is marked read a moment later.
       if (firstUnreadRef.current === null) {
-        const firstUnread = list.find((m) => (
+        const firstUnread = msgs.find((m) => (
           String(m.fromId) !== myId
           && !(m.readBy || []).map(String).includes(myId)
           && m.read !== true
@@ -391,6 +434,60 @@ export default function ChatRoomScreen({ route, navigation }) {
       setLoading(false);
     }
   }, [chatId, myId]);
+
+  // Fetch the page of history immediately before what's currently loaded and
+  // prepend it. Guarded with refs (not state) so it stays safe to call from
+  // the scroll handler, which is intentionally kept referentially stable.
+  const loadOlderMessages = useCallback(async () => {
+    if (!chatId || loadingOlderRef.current || !hasMoreRef.current) return;
+    const oldest = messagesRef.current[0];
+    if (!oldest) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const res = await chatApi.messages(chatId, { before: oldest.createdAt, limit: PAGE_SIZE });
+      const data = res.data || {};
+      const older = Array.isArray(data) ? data : (data.messages || []);
+      const more = older.length >= PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
+      if (older.length) {
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => String(m._id)));
+          const fresh = older.filter((m) => !seen.has(String(m._id)));
+          return fresh.length ? [...fresh, ...prev] : prev;
+        });
+      }
+    } catch (e) {
+      console.log('Error loading older messages', e);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [chatId]);
+
+  // Keep a same-render-cycle mirror of the messages array (for loadOlderMessages,
+  // which needs synchronous read access to "the current oldest message" outside
+  // of a setState updater) and a stable ref to the latest loadOlderMessages
+  // closure (so the scroll handler can call it without needing to be recreated
+  // every time the messages array changes).
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const loadOlderRef = useRef(() => {});
+  useEffect(() => { loadOlderRef.current = loadOlderMessages; }, [loadOlderMessages]);
+
+  // Reset pagination/scroll bookkeeping whenever the chat itself changes (the
+  // screen can be reused across chats — e.g. tapping a different chat's push
+  // notification while one is already open — rather than always remounting).
+  useEffect(() => {
+    setLoading(true);   // hide the previous chat's messages while the new ones load
+    hasMoreRef.current = true;
+    setHasMore(true);
+    didInitialScrollRef.current = false;
+    firstUnreadRef.current = null;
+    setFirstUnreadId(null);
+    atBottomRef.current = true;
+    setAtBottom(true);
+  }, [chatId]);
 
   // Append a message if it's not already in the list (dedupe by _id).
   const upsertMessage = useCallback((m) => {
@@ -603,6 +700,9 @@ export default function ChatRoomScreen({ route, navigation }) {
 
   // Keep track of where the user is. `atBottomRef` is what the scroll logic
   // reads (always current); `atBottom` only drives the jump-to-latest button.
+  // Deliberately has no dependencies (reads everything through refs) so it
+  // never needs recreating — that's what lets loadOlderRef.current() below
+  // always call the freshest loadOlderMessages closure.
   const onListScroll = useCallback((e) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom =
@@ -611,6 +711,12 @@ export default function ChatRoomScreen({ route, navigation }) {
     if (near !== atBottomRef.current) {
       atBottomRef.current = near;
       setAtBottom(near);
+    }
+    // Scrolled near the top, after the initial jump-to-bottom has already
+    // happened (otherwise the empty-list starting position would falsely
+    // trigger this) → pull in the previous page of history.
+    if (didInitialScrollRef.current && contentOffset.y <= TOP_THRESHOLD) {
+      loadOlderRef.current?.();
     }
   }, []);
 
@@ -1617,6 +1723,20 @@ export default function ChatRoomScreen({ route, navigation }) {
             onContentSizeChange={onListContentSizeChange}
             onScroll={onListScroll}
             scrollEventThrottle={16}
+            // Prepending older messages must not shift what's on screen —
+            // this keeps whatever the user is currently looking at anchored
+            // in place while the earlier page is inserted above it.
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            ListHeaderComponent={
+              loadingOlder ? (
+                <View style={styles.loadOlderRow}>
+                  <ActivityIndicator size="small" color={Theme.colors.primary} />
+                  <Text style={styles.loadOlderText}>Loading earlier messages…</Text>
+                </View>
+              ) : (!hasMore && messages.length > 0 ? (
+                <Text style={styles.chatStartText}>This is the start of the conversation</Text>
+              ) : null)
+            }
             // Jumping to a pinned message that hasn't been measured yet: land
             // close, then let the list settle rather than throwing.
             onScrollToIndexFailed={({ index, averageItemLength }) => {
@@ -2151,6 +2271,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   listWrap: { flex: 1 },
+  loadOlderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  loadOlderText: {
+    marginLeft: 8,
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.xs,
+    color: Theme.colors.textSecondary,
+  },
+  chatStartText: {
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.xs,
+    color: Theme.colors.textSecondary,
+  },
   headerTitle: {
     fontFamily: Theme.typography.fontFamily,
     fontSize: Theme.typography.sizes.l,
