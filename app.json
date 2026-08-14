@@ -28,7 +28,7 @@
         "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "$(PRODUCT_NAME) shares your location with your manager only while you are punched in for a shift, so field visits can be verified and your route for the day can be recorded. Location is not collected once you punch out."
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
