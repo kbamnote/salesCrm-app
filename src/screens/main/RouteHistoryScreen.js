@@ -11,6 +11,10 @@ import { usersApi, locationsApi } from '../../api';
 import { Theme } from '../../theme/Theme';
 
 const INDIA = { latitude: 20.5937, longitude: 78.9629, latitudeDelta: 25, longitudeDelta: 25 };
+
+// Only the Android Google Maps key is configured, so iOS uses Apple Maps —
+// forcing PROVIDER_GOOGLE there renders a blank map. See TeamMapScreen.
+const MAP_PROVIDER = Platform.OS === 'ios' ? undefined : PROVIDER_GOOGLE;
 const fmtDate = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -103,7 +107,7 @@ export default function RouteHistoryScreen() {
 
       {/* Map */}
       <View style={{ flex: 1 }}>
-        <MapView ref={mapRef} provider={PROVIDER_GOOGLE} style={{ flex: 1 }} initialRegion={INDIA}>
+        <MapView ref={mapRef} provider={MAP_PROVIDER} style={{ flex: 1 }} initialRegion={INDIA}>
           {points.length > 1 && (
             <Polyline coordinates={points} strokeColor={Theme.colors.primary} strokeWidth={4} />
           )}

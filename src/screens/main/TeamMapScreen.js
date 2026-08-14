@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, AnimatedRegion } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { locationsApi, attendanceApi, usersApi } from '../../api';
 import SocketService from '../../services/location/SocketService';
 import { Theme } from '../../theme/Theme';
+
+// Google Maps needs a per-platform API key; only the Android one is configured,
+// so forcing PROVIDER_GOOGLE on iOS renders a blank grey map with invisible
+// markers. iOS falls back to Apple Maps, which is native and needs no key.
+// (customMapStyle is Google-only and is simply ignored by Apple Maps.)
+const MAP_PROVIDER = Platform.OS === 'ios' ? undefined : PROVIDER_GOOGLE;
 
 const STALE_MS = 12 * 60 * 1000;
 const INDIA_REGION = { latitude: 20.5937, longitude: 78.9629, latitudeDelta: 25, longitudeDelta: 25 };
@@ -330,7 +336,7 @@ export default function TeamMapScreen({ route }) {
     <View style={styles.container}>
       <MapView
         ref={mapRef}
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         style={{ flex: 1 }}
         mapType={mapType}
         customMapStyle={MAP_STYLE}
