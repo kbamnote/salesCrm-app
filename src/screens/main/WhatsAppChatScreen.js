@@ -195,6 +195,9 @@ export default function WhatsAppChatScreen({ route, navigation }) {
           data={messages}
           keyExtractor={(item, i) => String(item._id || i)}
           renderItem={renderMessage}
+          // iOS collapses an unflexed list inside KeyboardAvoidingView to zero
+          // height — messages load but render invisibly. Same fix as ChatRoom.
+          style={styles.messagesFlex}
           contentContainerStyle={styles.messagesList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
@@ -252,6 +255,7 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 4,
   },
+  messagesFlex: { flex: 1 },
   messagesList: { paddingVertical: Theme.spacing.m, paddingHorizontal: Theme.spacing.m },
   msgWrapper: { marginBottom: 6, maxWidth: '82%' },
   msgRight: { alignSelf: 'flex-end' },

@@ -1719,6 +1719,10 @@ export default function ChatRoomScreen({ route, navigation }) {
             data={messages}
             keyExtractor={(item, i) => item._id || String(i)}
             renderItem={renderMessage}
+            // Explicit flex is required on iOS: a ScrollView/FlatList with no
+            // flex inside a KeyboardAvoidingView collapses to zero height, so
+            // the messages load but nothing is visible. Android tolerated it.
+            style={styles.messagesFlex}
             contentContainerStyle={styles.messagesList}
             onContentSizeChange={onListContentSizeChange}
             onScroll={onListScroll}
@@ -2271,6 +2275,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   listWrap: { flex: 1 },
+  messagesFlex: { flex: 1 },
   loadOlderRow: {
     flexDirection: 'row',
     alignItems: 'center',
