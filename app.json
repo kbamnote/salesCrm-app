@@ -24,9 +24,9 @@
           "audio",
           "location"
         ],
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone for recording presentations.",
-        "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to access your location to verify field visits and attendance.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to share your work location with your manager while you are punched in, even in the background."
+        "NSMicrophoneUsageDescription": "$(PRODUCT_NAME) uses the microphone so you can record a sales presentation for your manager to review, and so you can send voice notes in team chats.",
+        "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "$(PRODUCT_NAME) shares your location with your manager only while you are punched in for a shift, so field visits can be verified and your route for the day can be recorded. Location is not collected once you punch out."
       },
       "buildNumber": "4"
     },
@@ -47,7 +47,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE"
       ],
       "package": "com.kbamnote.salesTapify",
-      "versionCode": 108,
+      "versionCode": 109,
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
@@ -63,27 +63,27 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for recording presentations."
+          "microphonePermission": "$(PRODUCT_NAME) uses the microphone so you can record a sales presentation for your manager to review, and so you can send voice notes in team chats."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture verification selfies."
+          "cameraPermission": "$(PRODUCT_NAME) uses the camera so you can take a verification selfie when you punch in or out of your shift, and so you can take and send photos in team chats and job reports."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images to chats, designs and payment proofs.",
-          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to take photos and send them in chats."
+          "photosPermission": "$(PRODUCT_NAME) accesses your photo library so you can attach existing images to team chats, upload design files, and submit payment proof for a closed deal.",
+          "cameraPermission": "$(PRODUCT_NAME) uses the camera so you can take a verification selfie when you punch in or out of your shift, and so you can take and send photos in team chats and job reports."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to share your work location with your manager while you are punched in, even in the background.",
-          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location to verify field visits and attendance.",
+          "locationAlwaysAndWhenInUsePermission": "$(PRODUCT_NAME) shares your location with your manager only while you are punched in for a shift, so field visits can be verified and your route for the day can be recorded. Location is not collected once you punch out.",
+          "locationWhenInUsePermission": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
