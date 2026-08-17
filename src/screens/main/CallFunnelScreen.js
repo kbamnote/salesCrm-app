@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Linking,
-  ActivityIndicator, RefreshControl, Modal, Alert, Image,
+  ActivityIndicator, RefreshControl, Modal, Alert, Image, TextInput, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { callAppointmentsApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
@@ -32,6 +33,16 @@ export default function CallFunnelScreen() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Re-assign extras. `slotChanged` stays false until HR actually touches a
+  // picker, so simply moving the meeting to another rep keeps the original
+  // date and time instead of silently overwriting it with today's.
+  const [slotDate, setSlotDate] = useState(new Date());
+  const [slotTime, setSlotTime] = useState(new Date());
+  const [slotChanged, setSlotChanged] = useState(false);
+  const [showDate, setShowDate] = useState(false);
+  const [showTime, setShowTime] = useState(false);
+  const [reason, setReason] = useState('');
+
   const load = async () => {
     try {
       const res = await callAppointmentsApi.list();
@@ -48,6 +59,18 @@ export default function CallFunnelScreen() {
 
   const openAssign = (item) => {
     setAssignFor(item);
+    // Seed the pickers with the slot the appointment already has, so opening
+    // them shows the current values rather than "now".
+    const existing = item.date ? new Date(item.date) : new Date();
+    setSlotDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+    const t = new Date();
+    if (item.time && /^\d{1,2}:\d{2}$/.test(item.time)) {
+      const [hh, mm] = item.time.split(':').map(Number);
+      t.setHours(hh, mm, 0, 0);
+    }
+    setSlotTime(t);
+    setSlotChanged(false);
+    setReason('');
     if (salesUsers.length === 0) {
       setUsersLoading(true);
       callAppointmentsApi.salesUsers()
@@ -57,13 +80,50 @@ export default function CallFunnelScreen() {
     }
   };
 
+  const closeAssign = () => {
+    if (busy) return;
+    setAssignFor(null);
+    setShowDate(false);
+    setShowTime(false);
+  };
+
+  const onSlotDate = (e, d) => {
+    setShowDate(false);
+    if (e?.type !== 'dismissed' && d) { setSlotDate(d); setSlotChanged(true); }
+  };
+
+  const onSlotTime = (e, d) => {
+    setShowTime(false);
+    if (e?.type !== 'dismissed' && d) { setSlotTime(d); setSlotChanged(true); }
+  };
+
+  const hhmm = (d) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
   const assignTo = async (u) => {
+    const wasAssigned = assignFor?.status === 'assigned';
     setBusy(true);
     try {
-      const res = await callAppointmentsApi.assign(assignFor._id, u._id);
+      // Only send date/time when HR actually picked a new slot.
+      const extra = slotChanged
+        ? { date: slotDate.toISOString(), time: hhmm(slotTime) }
+        : {};
+      if (reason.trim()) extra.reason = reason.trim();
+
+      const res = await callAppointmentsApi.assign(assignFor._id, u._id, extra);
       setItems((prev) => prev.map((x) => (x._id === res.data._id ? res.data : x)));
       setAssignFor(null);
-      Alert.alert('Assigned', `Sent to ${u.name}.`);
+      setShowDate(false);
+      setShowTime(false);
+
+      const sameRep = String(assignFor?.assignedTo || '') === String(u._id);
+      const when = slotChanged ? ` for ${fmtDate(slotDate)} at ${hhmm(slotTime)}` : '';
+      Alert.alert(
+        !wasAssigned ? 'Assigned' : sameRep ? 'Rescheduled' : 'Reassigned',
+        !wasAssigned ? `Sent to ${u.name}${when}.`
+          : sameRep ? `Kept with ${u.name}${when}.`
+          : `Moved to ${u.name}${when}.`,
+      );
     } catch (e) {
       Alert.alert('Error', e.response?.data?.error || 'Could not assign.');
     } finally {
@@ -157,15 +217,59 @@ export default function CallFunnelScreen() {
       />
 
       {/* Assign picker */}
-      <Modal visible={!!assignFor} transparent animationType="slide" onRequestClose={() => !busy && setAssignFor(null)}>
+      <Modal visible={!!assignFor} transparent animationType="slide" onRequestClose={closeAssign}>
         <View style={styles.modalOverlay}>
           <View style={styles.sheet}>
             <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>Assign to sales</Text>
-              <TouchableOpacity onPress={() => !busy && setAssignFor(null)}>
+              <Text style={styles.sheetTitle}>
+                {assignFor?.status === 'assigned' ? 'Reassign appointment' : 'Assign to sales'}
+              </Text>
+              <TouchableOpacity onPress={closeAssign}>
                 <Ionicons name="close" size={24} color={Theme.colors.text} />
               </TouchableOpacity>
             </View>
+
+            {/* Slot controls — shown when re-assigning, so HR can move the
+                meeting to a new date/time and to a different (or the same) rep
+                in one action. */}
+            {assignFor?.status === 'assigned' && (
+              <View style={styles.slotBox}>
+                <Text style={styles.slotCurrent}>
+                  Currently {assignFor?.assignedToName || 'unassigned'}
+                  {assignFor?.date ? ` · ${fmtDate(assignFor.date)}` : ''}
+                  {assignFor?.time ? ` at ${assignFor.time}` : ''}
+                </Text>
+                <View style={styles.slotRow}>
+                  <TouchableOpacity style={styles.slotBtn} onPress={() => setShowDate(true)}>
+                    <Ionicons name="calendar-outline" size={15} color={Theme.colors.primary} />
+                    <Text style={styles.slotText}>{fmtDate(slotDate)}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.slotBtn} onPress={() => setShowTime(true)}>
+                    <Ionicons name="time-outline" size={15} color={Theme.colors.primary} />
+                    <Text style={styles.slotText}>{hhmm(slotTime)}</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.slotHint}>
+                  {slotChanged
+                    ? 'New date and time will be applied.'
+                    : 'Tap a field above to move the meeting, or leave it to keep the current slot.'}
+                </Text>
+                <TextInput
+                  style={styles.reasonInput}
+                  placeholder="Reason (optional)"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                  value={reason}
+                  onChangeText={setReason}
+                />
+              </View>
+            )}
+
+            <Text style={styles.pickLabel}>
+              {assignFor?.status === 'assigned'
+                ? 'Choose who it goes to (same person is fine)'
+                : 'Choose a sales person'}
+            </Text>
+
             {usersLoading ? (
               <ActivityIndicator color={Theme.colors.primary} style={{ marginVertical: 20 }} />
             ) : (
@@ -174,24 +278,52 @@ export default function CallFunnelScreen() {
                 keyExtractor={(u) => String(u._id)}
                 style={{ maxHeight: 380 }}
                 ListEmptyComponent={<Text style={styles.emptyText}>No sales users found.</Text>}
-                renderItem={({ item: u }) => (
-                  <TouchableOpacity style={styles.userRow} onPress={() => assignTo(u)} disabled={busy}>
-                    <View style={styles.avatar}>
-                      {photoUri(u.avatar)
-                        ? <Image source={{ uri: photoUri(u.avatar) }} style={styles.avatarImg} />
-                        : <Text style={styles.avatarText}>{initialsOf(u.name)}</Text>}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.userName}>{u.name}</Text>
-                      <Text style={styles.userRole}>{u.role}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={Theme.colors.textSecondary} />
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item: u }) => {
+                  const isCurrent = String(assignFor?.assignedTo || '') === String(u._id);
+                  return (
+                    <TouchableOpacity
+                      style={[styles.userRow, isCurrent && styles.userRowCurrent]}
+                      onPress={() => assignTo(u)}
+                      disabled={busy}
+                    >
+                      <View style={styles.avatar}>
+                        {photoUri(u.avatar)
+                          ? <Image source={{ uri: photoUri(u.avatar) }} style={styles.avatarImg} />
+                          : <Text style={styles.avatarText}>{initialsOf(u.name)}</Text>}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userName}>
+                          {u.name}{isCurrent ? '  (current)' : ''}
+                        </Text>
+                        <Text style={styles.userRole}>{u.role}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={Theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                  );
+                }}
               />
             )}
+            {busy && <ActivityIndicator color={Theme.colors.primary} style={{ marginTop: 10 }} />}
           </View>
         </View>
+
+        {showDate && (
+          <DateTimePicker
+            value={slotDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onSlotDate}
+          />
+        )}
+        {showTime && (
+          <DateTimePicker
+            value={slotTime}
+            mode="time"
+            is24Hour
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onSlotTime}
+          />
+        )}
       </Modal>
     </View>
   );
@@ -242,7 +374,65 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 26 },
   sheetHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   sheetTitle: { fontFamily: Theme.typography.fontFamily, fontSize: 17, fontWeight: '800', color: Theme.colors.text },
+  slotBox: {
+    backgroundColor: '#F5F7FA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  slotCurrent: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  slotRow: { flexDirection: 'row', gap: 10 },
+  slotBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  slotText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.colors.text,
+  },
+  slotHint: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    marginTop: 7,
+  },
+  reasonInput: {
+    marginTop: 9,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 13,
+    color: Theme.colors.text,
+  },
+  pickLabel: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+    marginBottom: 4,
+  },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  userRowCurrent: { backgroundColor: 'rgba(99,102,241,0.07)', borderRadius: 10, paddingHorizontal: 6 },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Theme.colors.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: 38, height: 38, borderRadius: 19 },
   avatarText: { fontFamily: Theme.typography.fontFamily, fontSize: 13, fontWeight: '800', color: '#fff' },

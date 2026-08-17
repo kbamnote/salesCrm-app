@@ -265,7 +265,10 @@ export const callAppointmentsApi = {
   list: (params) => api.get('/call-appointments', { params }),
   create: (data) => api.post('/call-appointments', data),
   salesUsers: () => api.get('/call-appointments/sales-users'),
-  assign: (id, userId) => api.post(`/call-appointments/${id}/assign`, { userId }),
+  // Assign or re-assign. `extra` may carry { date, time, reason } to move the
+  // meeting to a new slot at the same time — omit it to keep the slot as-is.
+  assign: (id, userId, extra = {}) =>
+    api.post(`/call-appointments/${id}/assign`, { userId, ...extra }),
 };
 
 // "Daily Field Visit" — one report per client meeting, filed by the sales rep.
