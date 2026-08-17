@@ -48,11 +48,14 @@ const OUTCOMES = [
   { key: 'line_busy',         label: 'Line Busy',         icon: 'time-outline',            color: '#F59E0B' },
   { key: 'not_interested',    label: 'Not Interested',    icon: 'close-circle-outline',    color: '#EF4444' },
   { key: 'appointment_fixed', label: 'Appointment Fixed', icon: 'calendar-outline',        color: '#10B981' },
-  // Anything that doesn't fit the four above — the reason box is mandatory so
-  // "Other" can never be used to skip explaining what happened.
+  // End-of-day reporting call — a real, connected call, but not prospecting,
+  // so it's tracked separately from the sales outcomes above.
+  { key: 'eod_call',          label: 'EOD Call',          icon: 'moon-outline',            color: '#0EA5E9' },
+  // Anything that doesn't fit the options above — the reason box is mandatory
+  // so "Other" can never be used to skip explaining what happened.
   { key: 'other',             label: 'Other',             icon: 'ellipsis-horizontal-circle-outline', color: '#6366F1' },
-  // Escape hatch: the dialler opened but no call was actually placed, so the
-  // rep isn't forced to log a false outcome for a misdial.
+  // The dialler opened but no call was actually placed. Still logged, so the
+  // attempt shows up in Call Logs — it just doesn't count as connected.
   { key: 'call_not_placed',   label: 'Call not placed',   icon: 'return-up-back-outline',  color: '#9CA3AF' },
 ];
 
@@ -176,16 +179,16 @@ export default function DialPadScreen() {
 
     setSaving(true);
     try {
-      // Log the call itself for every outcome except a non-call.
-      if (outcome !== 'call_not_placed') {
-        await callsApi.create({
-          phone: feedbackFor,
-          clientName: form.companyName.trim() || form.ownerName.trim() || feedbackFor,
-          date: new Date(),
-          outcome,
-          reason: REASON_REQUIRED.includes(outcome) ? reason.trim() : '',
-        }).catch(() => {});   // never block the funnel on the call log
-      }
+      // Log every outcome, including "call not placed" — the attempt is still
+      // part of the day's activity and must be visible in Call Logs. Whether it
+      // counts as *connected* is decided server-side when reports are built.
+      await callsApi.create({
+        phone: feedbackFor,
+        clientName: form.companyName.trim() || form.ownerName.trim() || feedbackFor,
+        date: new Date(),
+        outcome,
+        reason: REASON_REQUIRED.includes(outcome) ? reason.trim() : '',
+      }).catch(() => {});   // never block the funnel on the call log
 
       if (outcome === 'appointment_fixed') {
         await callAppointmentsApi.create({

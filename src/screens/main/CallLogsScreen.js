@@ -28,7 +28,20 @@ const OUTCOMES = {
   appointment_fixed: { label: 'Appointment Fixed', color: '#10B981' },
   call_not_placed:   { label: 'Call not placed',   color: '#9CA3AF' },
   other:             { label: 'Other',             color: '#6366F1' },
+  eod_call:          { label: 'EOD Call',          color: '#0EA5E9' },
 };
+
+// Quick filters across the top of the log. 'all' clears the outcome filter.
+const OUTCOME_FILTERS = [
+  { key: 'all',               label: 'All' },
+  { key: 'appointment_fixed', label: 'Appointments' },
+  { key: 'eod_call',          label: 'EOD Call' },
+  { key: 'not_interested',    label: 'Not Interested' },
+  { key: 'unreachable',       label: 'Unreachable' },
+  { key: 'line_busy',         label: 'Line Busy' },
+  { key: 'call_not_placed',   label: 'Not placed' },
+  { key: 'other',             label: 'Other' },
+];
 
 const ymd = (d) => {
   const x = new Date(d);
@@ -43,7 +56,8 @@ export default function CallLogsScreen() {
   const isOversight = OVERSIGHT_ROLES.includes(user?.role);
 
   const [calls, setCalls] = useState([]);
-  const [summary, setSummary] = useState({ total: 0, connected: 0, appointments: 0 });
+  const [summary, setSummary] = useState({ total: 0, connected: 0, appointments: 0, eod: 0 });
+  const [outcome, setOutcome] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -61,17 +75,20 @@ export default function CallLogsScreen() {
   const load = useCallback(async () => {
     try {
       const res = await callsApi.log({
-        from: ymd(from), to: ymd(to), userId: userId || undefined,
+        from: ymd(from),
+        to: ymd(to),
+        userId: userId || undefined,
+        outcome: outcome === 'all' ? undefined : outcome,
       });
       setCalls(res.data?.calls || []);
-      setSummary(res.data?.summary || { total: 0, connected: 0, appointments: 0 });
+      setSummary(res.data?.summary || { total: 0, connected: 0, appointments: 0, eod: 0 });
     } catch (e) {
       console.log('Call log load failed', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [from, to, userId]);
+  }, [from, to, userId, outcome]);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -96,8 +113,13 @@ export default function CallLogsScreen() {
   const download = async () => {
     setExporting(true);
     try {
+      // Export honours the on-screen outcome filter, so what you download
+      // matches what you're looking at.
       const res = await callsApi.logExport({
-        from: ymd(from), to: ymd(to), userId: userId || undefined,
+        from: ymd(from),
+        to: ymd(to),
+        userId: userId || undefined,
+        outcome: outcome === 'all' ? undefined : outcome,
       });
       const { filename, base64 } = res.data;
       const fileUri = `${FileSystem.cacheDirectory}${filename}`;
@@ -183,10 +205,33 @@ export default function CallLogsScreen() {
       </View>
 
       {/* Summary */}
+      {/* Outcome quick-filters */}
+      <View style={styles.chipWrap}>
+        <FlatList
+          data={OUTCOME_FILTERS}
+          keyExtractor={(o) => o.key}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+          renderItem={({ item: o }) => {
+            const on = outcome === o.key;
+            return (
+              <TouchableOpacity
+                style={[styles.chip, on && styles.chipOn]}
+                onPress={() => setOutcome(o.key)}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{o.label}</Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
       <View style={styles.stats}>
         <Stat label="Dialled" value={summary.total} />
         <Stat label="Connected" value={summary.connected} color="#10B981" />
         <Stat label="Appointments" value={summary.appointments} color="#6366F1" />
+        <Stat label="EOD" value={summary.eod || 0} color="#0EA5E9" />
       </View>
 
       {loading ? (
@@ -329,6 +374,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Theme.colors.primary,
   },
+  chipWrap: { borderBottomWidth: 1, borderBottomColor: Theme.colors.border },
+  chipRow: { paddingHorizontal: Theme.spacing.m, paddingVertical: 10, gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  chipOn: { backgroundColor: Theme.colors.primary, borderColor: Theme.colors.primary },
+  chipText: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
+  },
+  chipTextOn: { color: '#fff' },
   stats: {
     flexDirection: 'row',
     paddingVertical: Theme.spacing.m,
