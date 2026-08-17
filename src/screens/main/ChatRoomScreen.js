@@ -6,13 +6,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { chatApi, usersApi } from '../../api';
 import { photoUri, initialsOf } from '../../utils/avatar';
 import LinkedText from '../../components/LinkedText';
+import ZoomableImage from '../../components/ZoomableImage';
 
 // Quick-reaction emojis offered on long-press (same set WhatsApp defaults to).
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -2240,18 +2241,15 @@ export default function ChatRoomScreen({ route, navigation }) {
         animationType="fade"
         onRequestClose={() => setPreviewImage(null)}
       >
-        <View style={styles.previewOverlay}>
+        {/* A Modal renders in its own view hierarchy, so gesture-handler needs
+            its own root inside it — without this the pinch never fires on
+            Android. */}
+        <GestureHandlerRootView style={styles.previewOverlay}>
           <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewImage(null)}>
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
-          {previewImage && (
-            <Image
-              source={{ uri: previewImage }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
+          {previewImage && <ZoomableImage uri={previewImage} />}
+        </GestureHandlerRootView>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -2734,10 +2732,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  previewImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
   },
   membersOverlay: {
     flex: 1,
