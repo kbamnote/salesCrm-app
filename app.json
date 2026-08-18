@@ -26,7 +26,7 @@
         "NSMicrophoneUsageDescription": "$(PRODUCT_NAME) uses the microphone so you can record a sales presentation for your manager to review, and so you can send voice notes in team chats.",
         "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance."
       },
-      "buildNumber": "5"
+      "buildNumber": "6"
     },
     "android": {
       "adaptiveIcon": {
