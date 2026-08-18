@@ -83,9 +83,14 @@ export const attendanceApi = {
   roster: (date) => api.get('/attendance/roster', { params: date ? { date } : {} }),
   // Admin/HR: every submitted daily report for a date (default today).
   reports: (date) => api.get('/attendance/reports', { params: date ? { date } : {} }),
-  // Suggested numbers for today's report, derived from actual activity
+  // Suggested numbers for a day's report, derived from actual activity
   // (calls / appointments / field visits). Pre-fills the punch-out form.
-  reportPrefill: () => api.get('/attendance/report-prefill'),
+  // Pass a YYYY-MM-DD date when backfilling a missed day.
+  reportPrefill: (date) => api.get('/attendance/report-prefill', { params: date ? { date } : {} }),
+  // Days the user punched in but never filed a report (forgot to punch out).
+  missedReports: () => api.get('/attendance/missed-reports'),
+  // File the report for one of those missed days.
+  submitMissedReport: (date, report) => api.post('/attendance/missed-report', { date, report }),
   // Excel export of the caller's OWN reports — period: daily|weekly|monthly,
   // date: YYYY-MM-DD (reference day inside the period). Returns { filename, base64 }.
   exportReport: (params) => api.get('/attendance/export', { params }),

@@ -74,6 +74,13 @@ export default function AttendanceScreen() {
   const pendingReportRef = useRef(null); // holds the submitted report until punch-out completes
   const setMetric = (k, v) => setReportValues((p) => ({ ...p, [k]: v.replace(/[^0-9]/g, '') }));
 
+  // Days the user punched in on but never filed a report for (they forgot to
+  // punch out). `missedDay` non-null means the report modal is in backfill mode
+  // for that date rather than collecting today's punch-out report.
+  const [missedDays, setMissedDays] = useState([]);
+  const [missedDay, setMissedDay] = useState(null);
+  const [savingMissed, setSavingMissed] = useState(false);
+
   // Excel report export (My Attendance) — daily / weekly / monthly, pickable.
   // Reference date defaults to today; weekly/monthly use the containing week/month.
   const [exportPeriod, setExportPeriod] = useState('monthly'); // 'daily' | 'weekly' | 'monthly'
@@ -157,7 +164,46 @@ export default function AttendanceScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
+  useFocusEffect(useCallback(() => {
+    loadData();
+    // Chase any day left without a report. Silent on failure — a missing
+    // reminder must never block attendance itself.
+    attendanceApi.missedReports()
+      .then((r) => setMissedDays(r.data || []))
+      .catch(() => {});
+  }, []));
+
+  const fmtMissed = (d) =>
+    new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+
+  // Open the report form for a day that was never closed out.
+  const openMissedReport = (day) => {
+    setMissedDay(day);
+    setReportValues({});
+    setWorkCategory('');
+    setRemarks('');
+    setReportModalOpen(true);
+    // Pre-fill from THAT day's recorded activity, not today's.
+    attendanceApi.reportPrefill(day.date)
+      .then((r) => {
+        const p = r?.data;
+        if (!p || typeof p !== 'object') return;
+        const prefill = {};
+        Object.entries(p).forEach(([k, v]) => {
+          if (k === 'type') return;
+          const n = parseInt(v, 10);
+          if (Number.isFinite(n)) prefill[k] = String(n);
+        });
+        setReportValues((prev) => {
+          const merged = { ...prev };
+          Object.entries(prefill).forEach(([k, v]) => {
+            if (merged[k] === undefined || merged[k] === '') merged[k] = v;
+          });
+          return merged;
+        });
+      })
+      .catch(() => {});
+  };
 
   const getCurrentLocationAndAddress = async () => {
     if (!locationGranted) {
@@ -237,6 +283,7 @@ export default function AttendanceScreen() {
   // Punch-out requires a daily report first — open that modal instead of the
   // camera directly. The camera/location step only runs after it's submitted.
   const onPunchOutPress = () => {
+    setMissedDay(null);   // today's report, not a backfill
     setReportValues({});
     setWorkCategory('');
     setRemarks('');
@@ -312,7 +359,7 @@ export default function AttendanceScreen() {
     }
   };
 
-  const submitReport = () => {
+  const submitReport = async () => {
     const num = (k) => { const n = parseInt(reportValues[k], 10); return Number.isFinite(n) ? n : 0; };
 
     let report;
@@ -331,7 +378,12 @@ export default function AttendanceScreen() {
       };
     } else {
       if (!workCategory.trim()) {
-        return Alert.alert('Work category required', "Please enter today's work category before punching out.");
+        return Alert.alert(
+          'Work category required',
+          missedDay
+            ? 'Please enter the work category for that day.'
+            : "Please enter today's work category before punching out.",
+        );
       }
       report = {
         type: 'field',
@@ -344,8 +396,28 @@ export default function AttendanceScreen() {
       };
     }
 
-    pendingReportRef.current = report;
     Keyboard.dismiss();
+
+    // Backfilling a day the user forgot to close: file the report on its own.
+    // There's no punch-out step — we can't know when they actually left, so no
+    // selfie or location is captured for it.
+    if (missedDay) {
+      setSavingMissed(true);
+      try {
+        await attendanceApi.submitMissedReport(missedDay.date, report);
+        setReportModalOpen(false);
+        setMissedDay(null);
+        setMissedDays((prev) => prev.filter((d) => d.date !== missedDay.date));
+        Alert.alert('Report submitted', `Your report for ${fmtMissed(missedDay.date)} has been saved.`);
+      } catch (e) {
+        Alert.alert('Error', e.response?.data?.error || 'Could not submit that report.');
+      } finally {
+        setSavingMissed(false);
+      }
+      return;
+    }
+
+    pendingReportRef.current = report;
     setReportModalOpen(false);
     handlePunchClick('out');
   };
@@ -498,6 +570,38 @@ export default function AttendanceScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={Theme.colors.primary} />}
     >
+      {/* Days left without a report because the user never punched out. Shown
+          at the top until each one is filed. */}
+      {missedDays.length > 0 && (
+        <View style={styles.missedCard}>
+          <View style={styles.missedHead}>
+            <Ionicons name="alert-circle" size={18} color="#B45309" />
+            <Text style={styles.missedTitle}>
+              {missedDays.length === 1
+                ? 'You missed a daily report'
+                : `You missed ${missedDays.length} daily reports`}
+            </Text>
+          </View>
+          <Text style={styles.missedSub}>
+            You didn't punch out on {missedDays.length === 1 ? 'this day' : 'these days'}, so the
+            report was never filed. Please submit it now.
+          </Text>
+          {missedDays.map((d) => (
+            <TouchableOpacity
+              key={d.date}
+              style={styles.missedRow}
+              onPress={() => openMissedReport(d)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={15} color="#B45309" />
+              <Text style={styles.missedDate}>{fmtMissed(d.date)}</Text>
+              <Text style={styles.missedCta}>Fill report</Text>
+              <Ionicons name="chevron-forward" size={16} color="#B45309" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Today's Status Card */}
       <View style={styles.todayCard}>
         <Text style={styles.todayTitle}>Today's Attendance</Text>
@@ -682,9 +786,17 @@ export default function AttendanceScreen() {
           <View style={styles.reportHeader}>
             <View>
               <Text style={styles.reportTitle}>{reportType === 'calling' ? 'Calling Report' : 'Daily Report'}</Text>
-              <Text style={styles.reportSubtitle}>Required to punch out</Text>
+              <Text style={styles.reportSubtitle}>
+                {missedDay
+                  ? `Missed report for ${fmtMissed(missedDay.date)}`
+                  : 'Required to punch out'}
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => { Keyboard.dismiss(); setReportModalOpen(false); }}>
+            <TouchableOpacity onPress={() => {
+              Keyboard.dismiss();
+              setReportModalOpen(false);
+              setMissedDay(null);
+            }}>
               <Ionicons name="close" size={24} color={Theme.colors.text} />
             </TouchableOpacity>
           </View>
@@ -745,9 +857,21 @@ export default function AttendanceScreen() {
               </>
             )}
 
-            <TouchableOpacity style={styles.reportSubmit} onPress={submitReport}>
-              <Ionicons name="exit-outline" size={18} color="#fff" />
-              <Text style={styles.reportSubmitText}>Submit & Continue Punch Out</Text>
+            <TouchableOpacity
+              style={[styles.reportSubmit, savingMissed && { opacity: 0.7 }]}
+              onPress={submitReport}
+              disabled={savingMissed}
+            >
+              {savingMissed ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name={missedDay ? 'checkmark-done-outline' : 'exit-outline'} size={18} color="#fff" />
+                  <Text style={styles.reportSubmitText}>
+                    {missedDay ? 'Submit Missed Report' : 'Submit & Continue Punch Out'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -805,6 +929,54 @@ export default function AttendanceScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Theme.colors.surface },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Theme.colors.surface },
+  missedCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 14,
+    padding: 14,
+    marginHorizontal: Theme.spacing.m,
+    marginTop: Theme.spacing.m,
+  },
+  missedHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  missedTitle: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.m,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  missedSub: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 5,
+    lineHeight: 17,
+  },
+  missedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    marginTop: 9,
+  },
+  missedDate: {
+    flex: 1,
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: Theme.typography.sizes.s,
+    fontWeight: '700',
+    color: Theme.colors.text,
+  },
+  missedCta: {
+    fontFamily: Theme.typography.fontFamily,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+  },
   todayCard: {
     backgroundColor: Theme.colors.white,
     margin: Theme.spacing.m,
