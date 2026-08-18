@@ -21,12 +21,10 @@
       },
       "infoPlist": {
         "UIBackgroundModes": [
-          "audio",
-          "location"
+          "audio"
         ],
         "NSMicrophoneUsageDescription": "$(PRODUCT_NAME) uses the microphone so you can record a sales presentation for your manager to review, and so you can send voice notes in team chats.",
-        "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "$(PRODUCT_NAME) shares your location with your manager only while you are punched in for a shift, so field visits can be verified and your route for the day can be recorded. Location is not collected once you punch out."
+        "NSLocationWhenInUseUsageDescription": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance."
       },
       "buildNumber": "5"
     },
@@ -82,8 +80,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "$(PRODUCT_NAME) shares your location with your manager only while you are punched in for a shift, so field visits can be verified and your route for the day can be recorded. Location is not collected once you punch out.",
           "locationWhenInUsePermission": "$(PRODUCT_NAME) uses your location to confirm you are at the client's site when you log a field visit, and to record where you punched in or out for attendance.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }

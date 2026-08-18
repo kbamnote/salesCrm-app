@@ -471,8 +471,10 @@ export default function AttendanceScreen() {
           const track = await startBackgroundTracking({ prompt: true });
           if (!track.granted) {
             Alert.alert(
-              'Background location needed',
-              track.reason === 'background-denied'
+              'Location permission needed',
+              // iOS never asks for "always" — it only shares location while the
+              // app is open — so that instruction would be wrong there.
+              track.reason === 'background-denied' && Platform.OS === 'android'
                 ? 'Please set location permission to "Allow all the time" so your work location is shared while the app is in the background.'
                 : 'Location permission is required to track your field activity during working hours.'
             );

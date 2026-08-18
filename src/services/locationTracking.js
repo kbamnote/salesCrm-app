@@ -15,7 +15,7 @@
  * Tracking lifetime is still gated by attendance: it starts on punch-in and
  * stops on punch-out / logout (unchanged behaviour).
  */
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
 // Importing this registers the OS background task at startup (side effect).
 import { LOCATION_TASK_NAME } from './location/backgroundTask';
@@ -31,15 +31,26 @@ export { LOCATION_TASK_NAME };
  * Resolves true only if the user taps "Allow".
  */
 function showLocationDisclosure() {
+  // The wording has to match what each platform actually does. iOS collects
+  // location only while the app is open (no background location mode); Android
+  // continues in the background behind a persistent notification.
+  const body = Platform.OS === 'ios'
+    ? 'Tapify uses your location while the app is open to share your location and route '
+      + 'with your managers for attendance and field-visit tracking.\n\n'
+      + 'This happens only during your working hours, after you punch in for attendance, '
+      + 'and stops when you punch out.\n\n'
+      + 'Do you allow Tapify to collect this location data?'
+    : 'Tapify collects your location — including in the background, while the app is '
+      + 'closed or not in use — to share your live location and route with your managers '
+      + 'for attendance and field-visit tracking.\n\n'
+      + 'This happens only during your working hours, after you punch in for attendance, '
+      + 'and stops when you punch out.\n\n'
+      + 'Do you allow Tapify to collect this location data?';
+
   return new Promise((resolve) => {
     Alert.alert(
       'Location access',
-      'Tapify collects your location — including in the background, while the app is ' +
-        'closed or not in use — to share your live location and route with your managers ' +
-        'for attendance and field-visit tracking.\n\n' +
-        'This happens only during your working hours, after you punch in for attendance, ' +
-        'and stops when you punch out.\n\n' +
-        'Do you allow Tapify to collect this location data?',
+      body,
       [
         { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
         { text: 'Allow', onPress: () => resolve(true) },
@@ -65,6 +76,23 @@ export async function ensureBackgroundPermission({ prompt = true } = {}) {
   // Check current status first — if it's already granted, no OS prompt will show,
   // so we must NOT nag the user with the disclosure again.
   const fgCurrent = await Location.getForegroundPermissionsAsync();
+
+  // iOS: foreground ("while using the app") only. Apple's guideline 2.5.4
+  // forbids the background location mode when its sole purpose is tracking
+  // employees, so we never request always-permission there. Live location
+  // therefore updates only while the app is on screen.
+  if (Platform.OS === 'ios') {
+    if (fgCurrent.status === 'granted') return { granted: true };
+    if (prompt) {
+      const consented = await showLocationDisclosure();
+      if (!consented) return { granted: false, reason: 'disclosure-declined' };
+    }
+    const fgOnly = prompt ? await Location.requestForegroundPermissionsAsync() : fgCurrent;
+    return fgOnly.status === 'granted'
+      ? { granted: true }
+      : { granted: false, reason: 'foreground-denied' };
+  }
+
   const bgCurrent = await Location.getBackgroundPermissionsAsync();
   const alreadyGranted = fgCurrent.status === 'granted' && bgCurrent.status === 'granted';
 
@@ -113,10 +141,17 @@ export async function startBackgroundTracking({ prompt = true } = {}) {
   const perm = await ensureBackgroundPermission({ prompt });
   if (!perm.granted) return perm;
 
-  // Foreground real-time pipeline (no-op if already running).
+  // Foreground real-time pipeline (no-op if already running). On iOS this is
+  // the ONLY pipeline — see below.
   await TrackingManager.start();
 
-  // OS background updates (continue while app is not foregrounded).
+  // iOS stops here: no OS background location task, because the app no longer
+  // declares the location background mode (guideline 2.5.4). Positions are
+  // reported while the app is foregrounded and pause when it isn't.
+  if (Platform.OS === 'ios') return { granted: true };
+
+  // Android: OS background updates continue while the app is not foregrounded,
+  // behind a persistent foreground-service notification.
   if (!(await isTracking())) {
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.BestForNavigation,
